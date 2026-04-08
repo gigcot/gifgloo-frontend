@@ -8,58 +8,58 @@ import { SearchBar } from "@/features/gif-search/ui/SearchBar";
 import { GifGrid } from "@/features/gif-search/ui/GifGrid";
 import { ComposeBar } from "@/features/compose/ui/ComposeBar";
 import { LoginModal } from "@/features/auth/ui/LoginModal";
+import { HeaderActions } from "@/features/auth/ui/HeaderActions";
 import type { Gif } from "@/entities/gif/model";
+import { safeParseGif } from "@/entities/gif/model";
+import { fetchTrending } from "@/shared/api/klipy";
+import { useAuth } from "@/shared/lib/use-auth";
 
 export default function Home() {
   const router = useRouter();
+  const { isLoggedIn, checked, checkAuth } = useAuth();
   const [selectedGif, setSelectedGif] = useState<Gif | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showLogin, setShowLogin] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [trendingGifs, setTrendingGifs] = useState<Gif[]>([]);
+  const [trendingError, setTrendingError] = useState(false);
 
   useEffect(() => {
-    async function checkAuth() {
-      try {
-        const res = await fetch("http://localhost:8000/users/me", {
-          credentials: "include",
-        });
-        setIsLoggedIn(res.ok);
-
-        const pendingGif = localStorage.getItem("pending_gif");
-        const action = localStorage.getItem("pending_action");
-
-        if (action === "compose" && res.ok) {
-          localStorage.removeItem("pending_action");
-          if (pendingGif) {
-            localStorage.setItem("compose_gif", pendingGif);
-            localStorage.removeItem("pending_gif");
-          }
-          router.push("/compose");
-        } else if (pendingGif) {
-          setSelectedGif(JSON.parse(pendingGif));
-          localStorage.removeItem("pending_gif");
-        }
-      } catch {
-        setIsLoggedIn(false);
-      }
-    }
-
-    checkAuth();
+    fetchTrending(1, 24)
+      .then(setTrendingGifs)
+      .catch(() => setTrendingError(true));
   }, []);
 
-  async function goCompose() {
-    try {
-      const res = await fetch("http://localhost:8000/users/me", {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error();
-    } catch {
+  // 로그인 후 복귀 처리 (pending_action)
+  useEffect(() => {
+    if (!checked) return;
+
+    const pendingGif = localStorage.getItem("pending_gif");
+    const action = localStorage.getItem("pending_action");
+
+    if (action === "compose" && isLoggedIn) {
+      localStorage.removeItem("pending_action");
+      if (pendingGif) {
+        localStorage.setItem("compose_gif", pendingGif);
+        localStorage.removeItem("pending_gif");
+      }
+      router.push("/compose");
+    } else if (pendingGif) {
+      const gif = safeParseGif(pendingGif);
+      if (gif) setSelectedGif(gif);
+      localStorage.removeItem("pending_gif");
+    }
+  }, [checked, isLoggedIn, router]);
+
+  async function goCompose(gif?: Gif) {
+    const loggedIn = await checkAuth();
+    if (!loggedIn) {
       localStorage.setItem("pending_action", "compose");
       setShowLogin(true);
       return;
     }
-    if (selectedGif) {
-      localStorage.setItem("compose_gif", JSON.stringify(selectedGif));
+    const gifToUse = gif ?? selectedGif;
+    if (gifToUse) {
+      localStorage.setItem("compose_gif", JSON.stringify(gifToUse));
     }
     router.push("/compose");
   }
@@ -70,21 +70,24 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white">
-      <Header
-        action={
-          <button
-            onClick={() => setShowLogin(true)}
-            className="rounded-full bg-purple-600 px-5 py-2 text-base font-semibold text-white transition-colors hover:bg-purple-700"
-          >
-            로그인
-          </button>
-        }
-      />
-      <TrendingShowcase onCompose={goCompose} />
+      <Header action={<HeaderActions onLogin={() => setShowLogin(true)} />} />
+      <TrendingShowcase gifs={trendingGifs.slice(0, 7)} onCompose={goCompose} />
+
+      <div className="bg-white/[0.03] px-4 py-5">
+        <div className="mx-auto max-w-screen-xl">
+          <p className="text-lg font-semibold text-white">합성할 GIF를 찾아보세요</p>
+          <p className="mt-1 text-sm text-white/40">마음에 드는 GIF를 선택하고 내 사진과 합성해봐요</p>
+        </div>
+      </div>
+
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 
       <main className={`mx-auto max-w-screen-xl px-4 py-4 ${selectedGif ? "pb-28" : ""}`}>
-        <GifGrid selectedId={selectedGif?.id ?? null} onSelect={handleSelectGif} />
+        {trendingError && trendingGifs.length === 0 && !searchQuery ? (
+          <p className="py-12 text-center text-white/40">GIF를 불러오지 못했어요. 새로고침해 주세요.</p>
+        ) : (
+          <GifGrid query={searchQuery} trendingGifs={trendingGifs} selectedId={selectedGif?.id ?? null} onSelect={handleSelectGif} />
+        )}
       </main>
 
       <ComposeBar selectedGif={selectedGif} onCompose={goCompose} />
