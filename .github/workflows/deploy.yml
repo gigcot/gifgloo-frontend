@@ -1,0 +1,62 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Package build artifacts
+        run: |
+          tar -czf deploy.tar.gz \
+            .next/standalone \
+            .next/static \
+            public \
+            package.json
+
+      - name: Deploy to EC2
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          scp -i ~/.ssh/deploy_key deploy.tar.gz "$EC2_USER@$EC2_HOST:/tmp/deploy.tar.gz"
+
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << 'DEPLOY'
+            set -e
+            APP_DIR=~/gifgloo-frontend
+
+            mkdir -p $APP_DIR
+            cd $APP_DIR
+
+            tar -xzf /tmp/deploy.tar.gz
+            rm /tmp/deploy.tar.gz
+
+            # Copy static files to standalone
+            cp -r .next/static .next/standalone/.next/
+            cp -r public .next/standalone/
+
+            # Restart with PM2
+            cd .next/standalone
+            pm2 delete gifgloo-frontend 2>/dev/null || true
+            PORT=3000 pm2 start server.js --name gifgloo-frontend
+            pm2 save
+          DEPLOY
