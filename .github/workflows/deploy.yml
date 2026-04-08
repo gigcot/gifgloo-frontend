@@ -32,26 +32,21 @@ jobs:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
+          KLIPY_API_KEY: ${{ secrets.KLIPY_API_KEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
-          echo "=== SSH key fingerprint ==="
-          ssh-keygen -l -f ~/.ssh/deploy_key || echo "Invalid key format"
-
-          echo "=== Testing SSH connection ==="
-          ssh -v -i ~/.ssh/deploy_key -o ConnectTimeout=10 "$EC2_USER@$EC2_HOST" echo "SSH OK"
-
           scp -i ~/.ssh/deploy_key deploy.tar.gz "$EC2_USER@$EC2_HOST:/tmp/deploy.tar.gz"
 
-          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << 'DEPLOY'
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << DEPLOY
             set -e
             APP_DIR=~/gifgloo-frontend
 
-            mkdir -p $APP_DIR
-            cd $APP_DIR
+            mkdir -p \$APP_DIR
+            cd \$APP_DIR
 
             tar -xzf /tmp/deploy.tar.gz
             rm /tmp/deploy.tar.gz
@@ -59,6 +54,9 @@ jobs:
             # Copy static files to standalone
             cp -r .next/static .next/standalone/.next/
             cp -r public .next/standalone/
+
+            # Write env file
+            echo "KLIPY_API_KEY=${KLIPY_API_KEY}" > .next/standalone/.env
 
             # Restart with PM2
             cd .next/standalone
