@@ -1,32 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
-const SHOWCASE_GRID = [
-  { url: "https://picsum.photos/seed/101/200/150", label: "😂 Funny" },
-  { url: "https://picsum.photos/seed/102/200/150", label: "🔥 Hot" },
-  { url: "https://picsum.photos/seed/103/200/150", label: "💜 Love" },
-  { url: "https://picsum.photos/seed/104/200/150", label: "🎉 Party" },
-];
-
-const SHOWCASE_SLIDES = [
-  { url: "https://picsum.photos/seed/201/400/300", label: "✨ gifgloo로 만든 합성" },
-  { url: "https://picsum.photos/seed/202/400/300", label: "🎭 내 얼굴이 GIF 속으로" },
-  { url: "https://picsum.photos/seed/203/400/300", label: "🚀 지금 바로 만들어봐" },
-];
+import type { Gif } from "@/entities/gif/model";
+import { getGifUrl } from "@/entities/gif/model";
 
 type Props = {
-  onCompose: () => void;
+  gifs: Gif[];
+  onCompose: (gif: Gif) => void;
 };
 
-type PreviewItem = { url: string; label: string };
-
 function ConfirmModal({
-  item,
+  gif,
   onConfirm,
   onCancel,
 }: {
-  item: PreviewItem;
+  gif: Gif;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -40,10 +28,10 @@ function ConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 overflow-hidden rounded-2xl">
-          <img src={item.url} alt={item.label} className="w-full object-cover" />
+          <img src={getGifUrl(gif, "md")} alt={gif.title} className="w-full object-cover" />
         </div>
-        <p className="mb-1 text-center text-lg font-bold text-white">이걸로 할까요?</p>
-        <p className="mb-5 text-center text-sm text-white/40">{item.label}</p>
+        <p className="mb-1 text-center text-lg font-bold text-white">이 GIF로 합성해봐요!</p>
+        <p className="mb-5 text-center text-sm text-white/40">{gif.title}</p>
         <div className="flex gap-2">
           <button
             onClick={onCancel}
@@ -63,88 +51,165 @@ function ConfirmModal({
   );
 }
 
-export function TrendingShowcase({ onCompose }: Props) {
+const FEATURED_RESULTS = [
+  { src: "/insung_hwang.gif", alt: "합성 결과 예시 1" },
+  { src: "/punch_pepe_hwang.gif", alt: "합성 결과 예시 2" },
+  { src: "/punch_pepe_podo.gif", alt: "합성 결과 예시 3" },
+];
+
+export function TrendingShowcase({ gifs, onCompose }: Props) {
+  const allGifs = gifs.slice(0, 7);
+  const gridGifs = gifs.slice(0, 4);
+  const slideGifs = gifs.slice(4, 7);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [preview, setPreview] = useState<PreviewItem | null>(null);
+  const [featuredSlide, setFeaturedSlide] = useState(0);
+  const [preview, setPreview] = useState<Gif | null>(null);
+
+  useEffect(() => {
+    if (allGifs.length === 0) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % allGifs.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [allGifs.length]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % SHOWCASE_SLIDES.length);
-    }, 2500);
+      setFeaturedSlide((prev) => (prev + 1) % FEATURED_RESULTS.length);
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
-
-  function handleSelect(item: PreviewItem) {
-    setPreview(item);
-  }
 
   return (
     <>
       <section className="bg-purple-600 px-4 py-5">
         <div className="mx-auto max-w-screen-xl">
-          <p className="mb-3 text-sm font-bold uppercase tracking-widest text-white/80">
-            Trending GIFs &amp; more
-          </p>
-          <div className="flex gap-2">
-            {/* 왼쪽: 2x2 그리드 */}
-            <div className="grid flex-1 grid-cols-2 gap-1.5">
-              {SHOWCASE_GRID.map((item) => (
-                <div
-                  key={item.label}
-                  onClick={() => handleSelect(item)}
-                  className="group relative cursor-pointer overflow-hidden rounded-lg"
-                >
-                  <img
-                    src={item.url}
-                    alt={item.label}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <span className="absolute bottom-2 left-2.5 text-sm font-bold text-white">
-                    {item.label}
-                  </span>
+          <p className="mb-3 text-2xl font-bold text-white">새로운 밈을 만들어봐요</p>
+
+          {/* 모바일: 좌우 2열 */}
+          <div className="flex gap-3 md:hidden">
+            {/* 왼쪽: 트렌딩 슬라이드 */}
+            <div className="flex flex-1 flex-col gap-2">
+              <p className="text-xs font-semibold text-white/70">지금 많이 사용되는 GIF</p>
+              <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "1/1" }}>
+                {allGifs.map((gif, i) => (
+                  <div
+                    key={gif.id}
+                    className={`absolute inset-0 transition-opacity duration-700 ${
+                      i === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none"
+                    }`}
+                  >
+                    <img
+                      src={getGifUrl(gif, "md")}
+                      alt={gif.title}
+                      onClick={() => setPreview(gif)}
+                      className="h-full w-full cursor-pointer object-contain"
+                    />
+                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/70 to-transparent" />
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <button
+                        onClick={() => setPreview(gif)}
+                        className="rounded-full bg-purple-800 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-900"
+                      >
+                        나도 만들기
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="absolute bottom-3 right-3 flex gap-1">
+                  {allGifs.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentSlide(i)}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        i === currentSlide ? "w-4 bg-white" : "w-1.5 bg-white/40"
+                      }`}
+                    />
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
 
-            {/* 오른쪽: 자동 슬라이드 */}
-            <div className="relative w-[42%] overflow-hidden rounded-lg">
-              {SHOWCASE_SLIDES.map((slide, i) => (
-                <div
-                  key={i}
-                  className={`absolute inset-0 transition-opacity duration-700 ${
-                    i === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none"
-                  }`}
-                >
-                  <img
-                    src={slide.url}
-                    alt={slide.label}
-                    onClick={() => handleSelect(slide)}
-                    className="h-full w-full cursor-pointer object-cover"
-                  />
-                  <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/70 to-transparent" />
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <p className="text-base font-bold leading-snug text-white">{slide.label}</p>
-                    <button
-                      onClick={() => handleSelect(slide)}
-                      className="mt-2 rounded-full bg-purple-800 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-purple-900"
-                    >
-                      이걸로 만들기
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              <div className="absolute bottom-3 right-3 flex gap-1">
-                {SHOWCASE_SLIDES.map((_, i) => (
-                  <button
+            {/* 오른쪽: 결과물 예시 */}
+            <div className="flex flex-1 flex-col gap-2">
+              <p className="text-xs font-semibold text-white/70">이렇게 만들 수 있어요</p>
+              <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "1/1" }}>
+                {FEATURED_RESULTS.map((item, i) => (
+                  <div
                     key={i}
-                    onClick={() => setCurrentSlide(i)}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                      i === currentSlide ? "w-4 bg-white" : "w-1.5 bg-white/40"
+                    className={`absolute inset-0 transition-opacity duration-700 ${
+                      i === featuredSlide ? "opacity-100" : "opacity-0"
                     }`}
-                  />
+                  >
+                    <img src={item.src} alt={item.alt} className="h-full w-full object-contain" />
+                  </div>
                 ))}
+                <div className="absolute bottom-3 right-3 flex gap-1">
+                  {FEATURED_RESULTS.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setFeaturedSlide(i)}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        i === featuredSlide ? "w-4 bg-white" : "w-1.5 bg-white/40"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 데스크탑: 트렌딩 + 결과물 예시 */}
+          <div className="hidden gap-4 md:flex">
+            {/* 왼쪽: 트렌딩 2x2 그리드 */}
+            <div className="flex flex-1 flex-col gap-2">
+              <p className="text-xs font-semibold text-white/70">지금 많이 사용되는 GIF</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {gridGifs.map((gif) => (
+                  <div
+                    key={gif.id}
+                    onClick={() => setPreview(gif)}
+                    className="group relative cursor-pointer overflow-hidden rounded-lg"
+                  >
+                    <img
+                      src={getGifUrl(gif, "sm")}
+                      alt={gif.title}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    <span className="absolute bottom-2 left-2.5 text-sm font-bold text-white line-clamp-1">
+                      {gif.title}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 오른쪽: 결과물 예시 슬라이드 */}
+            <div className="flex w-[38%] flex-col gap-2">
+              <p className="text-xs font-semibold text-white/70">이렇게 만들 수 있어요</p>
+              <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-black">
+                {FEATURED_RESULTS.map((item, i) => (
+                  <div
+                    key={i}
+                    className={`absolute inset-0 transition-opacity duration-700 ${
+                      i === featuredSlide ? "opacity-100" : "opacity-0"
+                    }`}
+                  >
+                    <img src={item.src} alt={item.alt} className="h-full w-full object-contain" />
+                  </div>
+                ))}
+                <div className="absolute bottom-3 right-3 flex gap-1">
+                  {FEATURED_RESULTS.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setFeaturedSlide(i)}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        i === featuredSlide ? "w-4 bg-white" : "w-1.5 bg-white/40"
+                      }`}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -153,8 +218,11 @@ export function TrendingShowcase({ onCompose }: Props) {
 
       {preview && (
         <ConfirmModal
-          item={preview}
-          onConfirm={() => { setPreview(null); onCompose(); }}
+          gif={preview}
+          onConfirm={() => {
+            onCompose(preview);
+            setPreview(null);
+          }}
           onCancel={() => setPreview(null)}
         />
       )}

@@ -14,7 +14,7 @@ export function SearchBar({ value, onChange }: Props) {
         <div className="relative">
           <input
             type="text"
-            placeholder="GIF 검색..."
+            placeholder="Search KLIPY"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="w-full rounded-full bg-white/10 px-5 py-3 text-base text-white placeholder-white/40 outline-none transition-colors focus:bg-white/15"
