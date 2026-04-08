@@ -1,6 +1,7 @@
 "use client";
 
 import type { Gif } from "@/entities/gif/model";
+import { API_BASE } from "@/shared/lib/api-base";
 
 type LoginModalProps = {
   onClose: () => void;
@@ -8,19 +9,19 @@ type LoginModalProps = {
 };
 
 export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
-  function savePendingAndRedirect(url: string) {
+  function savePendingAndRedirect(path: string) {
     if (pendingGif) {
       localStorage.setItem("pending_gif", JSON.stringify(pendingGif));
     }
-    window.location.href = url;
+    window.location.href = `${API_BASE}${path}`;
   }
 
   function handleKakao() {
-    savePendingAndRedirect("http://localhost:8000/oauth/kakao");
+    savePendingAndRedirect("/oauth/kakao");
   }
 
   function handleGoogle() {
-    savePendingAndRedirect("http://localhost:8000/oauth/google");
+    savePendingAndRedirect("/oauth/google");
   }
 
   return (
