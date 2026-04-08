@@ -1,11 +1,6 @@
 import type { Gif } from "@/entities/gif/model";
 
-const APP_KEY = process.env.NEXT_PUBLIC_KLIPY_API_KEY!;
-const BASE = "https://api.klipy.com/api/v1";
-
 function generateUUID(): string {
-  // crypto.randomUUID()는 HTTPS(secure context)에서만 동작.
-  // 프로덕션은 항상 HTTPS이므로 폴백은 로컬 HTTP 개발 환경에서만 실제로 사용됨.
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
@@ -64,7 +59,7 @@ function mapItem(item: KlipyItem): Gif {
 export async function fetchTrending(page = 1, perPage = 24): Promise<Gif[]> {
   const cid = getCustomerId();
   const res = await fetch(
-    `${BASE}/${APP_KEY}/gifs/trending?customer_id=${cid}&page=${page}&per_page=${perPage}`
+    `/api/gif?type=trending&customer_id=${cid}&page=${page}&per_page=${perPage}`
   );
   if (!res.ok) throw new Error(`Klipy trending error: ${res.status}`);
   const json = await res.json();
@@ -77,7 +72,7 @@ export async function fetchTrending(page = 1, perPage = 24): Promise<Gif[]> {
 export async function fetchSearch(q: string, page = 1): Promise<Gif[]> {
   const cid = getCustomerId();
   const res = await fetch(
-    `${BASE}/${APP_KEY}/gifs/search?q=${encodeURIComponent(q)}&customer_id=${cid}&page=${page}&per_page=24`
+    `/api/gif?type=search&q=${encodeURIComponent(q)}&customer_id=${cid}&page=${page}&per_page=24`
   );
   if (!res.ok) throw new Error(`Klipy search error: ${res.status}`);
   const json = await res.json();

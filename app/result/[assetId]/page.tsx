@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ResultClient } from "./ResultClient";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://api.gifgloo.com";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://gifgloo.com";
 
 type Asset = { result_url: string };
 
