@@ -8,6 +8,7 @@ import { SearchBar } from "@/features/gif-search/ui/SearchBar";
 import { GifGrid } from "@/features/gif-search/ui/GifGrid";
 import { ComposeBar } from "@/features/compose/ui/ComposeBar";
 import { LoginModal } from "@/features/auth/ui/LoginModal";
+import { NewUserWelcomeModal } from "@/features/auth/ui/NewUserWelcomeModal";
 import { HeaderActions } from "@/features/auth/ui/HeaderActions";
 import type { Gif } from "@/entities/gif/model";
 import { safeParseGif } from "@/entities/gif/model";
@@ -20,6 +21,7 @@ export default function Home() {
   const [selectedGif, setSelectedGif] = useState<Gif | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showLogin, setShowLogin] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   const [trendingGifs, setTrendingGifs] = useState<Gif[]>([]);
   const [trendingError, setTrendingError] = useState(false);
 
@@ -27,6 +29,13 @@ export default function Home() {
     fetchTrending(1, 24)
       .then(setTrendingGifs)
       .catch(() => setTrendingError(true));
+  }, []);
+
+  useEffect(() => {
+    if (sessionStorage.getItem("is_new_user") === "true") {
+      sessionStorage.removeItem("is_new_user");
+      setShowWelcome(true);
+    }
   }, []);
 
   // 로그인 후 복귀 처리 (pending_action)
@@ -92,6 +101,7 @@ export default function Home() {
 
       <ComposeBar selectedGif={selectedGif} onCompose={goCompose} />
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} pendingGif={selectedGif} />}
+      {showWelcome && <NewUserWelcomeModal onClose={() => setShowWelcome(false)} />}
     </div>
   );
 }

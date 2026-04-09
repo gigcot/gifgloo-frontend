@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export function CallbackHandler() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
+    const isNewUser = searchParams.get("is_new_user");
+    if (isNewUser === "true") {
+      sessionStorage.setItem("is_new_user", "true");
+    }
     router.replace("/");
   }, []);
 
