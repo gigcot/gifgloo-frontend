@@ -123,6 +123,7 @@ export function ComposePanel() {
     if (result.type === "job") {
       setJobId(result.jobId);
     } else if (result.type === "confirmation") {
+      composingRef.current = false;
       setConfirmation(result.confirmation);
       setStage("ready");
     } else if (result.type === "auth_required") {
@@ -130,12 +131,14 @@ export function ComposePanel() {
       localStorage.setItem("pending_action", "compose");
       router.push("/");
     } else {
+      composingRef.current = false;
       setError(result.message);
       setStage("error");
     }
   }
 
   function handleReset() {
+    composingRef.current = false;
     clearPhoto();
     setStage("ready");
     setError(null);
