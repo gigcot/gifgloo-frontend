@@ -19,6 +19,13 @@ export function ResultClient({ resultUrl, assetId }: Props) {
       const res = await fetch(resultUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
+      const file = new File([blob], "gifgloo.gif", { type: blob.type });
+
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objectUrl;
@@ -28,7 +35,7 @@ export function ResultClient({ resultUrl, assetId }: Props) {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch (e) {
-      console.error("다운로드 실패, 새 탭으로 열기:", e);
+      console.error("다운로드 실패:", e);
       window.open(resultUrl, "_blank");
     }
   }

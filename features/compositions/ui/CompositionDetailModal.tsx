@@ -9,12 +9,31 @@ type Props = {
 };
 
 export function CompositionDetailModal({ job, onClose }: Props) {
-  function handleDownload() {
+  async function handleDownload() {
     if (!job.result_url) return;
-    const a = document.createElement("a");
-    a.href = job.result_url;
-    a.download = "gifgloo.gif";
-    a.click();
+    try {
+      const res = await fetch(job.result_url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const file = new File([blob], "gifgloo.gif", { type: blob.type });
+
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = "gifgloo.gif";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (e) {
+      console.error("다운로드 실패:", e);
+      window.open(job.result_url, "_blank");
+    }
   }
 
   return (
