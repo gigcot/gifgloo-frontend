@@ -15,15 +15,22 @@ export function ResultClient({ resultUrl, assetId }: Props) {
     : `/result/${assetId}`;
 
   async function handleDownload() {
-    const blob = await fetch(resultUrl).then((r) => r.blob());
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = "gifgloo.gif";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    try {
+      const res = await fetch(resultUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = "gifgloo.gif";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (e) {
+      console.error("다운로드 실패, 새 탭으로 열기:", e);
+      window.open(resultUrl, "_blank");
+    }
   }
 
   return (
