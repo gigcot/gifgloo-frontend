@@ -14,7 +14,7 @@ export async function shareGif(
     const blob = await fetch(gifUrl).then((r) => r.blob());
     const file = new File([blob], filename, { type: blob.type });
     if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: "Gifgloo" });
+      await navigator.share({ files: [file], url: shareUrl ?? gifUrl, title: "Gifgloo" });
       return "file";
     }
   } catch { /* blob fetch 또는 파일 공유 실패 → fallback */ }

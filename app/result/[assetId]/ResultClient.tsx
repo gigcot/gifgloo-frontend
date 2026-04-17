@@ -14,11 +14,14 @@ export function ResultClient({ resultUrl, assetId }: Props) {
     ? `${window.location.origin}/result/${assetId}`
     : `/result/${assetId}`;
 
-  function handleDownload() {
+  async function handleDownload() {
+    const blob = await fetch(resultUrl).then((r) => r.blob());
+    const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = resultUrl;
+    a.href = objectUrl;
     a.download = "gifgloo.gif";
     a.click();
+    URL.revokeObjectURL(objectUrl);
   }
 
   return (
