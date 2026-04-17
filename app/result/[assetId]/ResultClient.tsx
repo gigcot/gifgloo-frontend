@@ -20,8 +20,10 @@ export function ResultClient({ resultUrl, assetId }: Props) {
     const a = document.createElement("a");
     a.href = objectUrl;
     a.download = "gifgloo.gif";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(objectUrl);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
 
   return (
