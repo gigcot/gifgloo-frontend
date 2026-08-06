@@ -2,15 +2,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ResultClient } from "./ResultClient";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://api.gifgloo.com";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://gifgloo.com";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL!;
 
-type Asset = { result_url: string };
+type SharedAsset = { result_url: string };
 
-async function fetchAsset(assetId: string): Promise<Asset | null> {
-  const res = await fetch(`${API_BASE}/assets/${assetId}`, {
-    next: { revalidate: 3600 },
-  });
+async function fetchSharedAsset(shareToken: string): Promise<SharedAsset | null> {
+  const res = await fetch(`${API_BASE}/assets/shared/${shareToken}`, { cache: "no-store" });
   if (!res.ok) return null;
   return res.json();
 }
@@ -20,11 +18,11 @@ export async function generateMetadata({
 }: {
   params: Promise<{ assetId: string }>;
 }): Promise<Metadata> {
-  const { assetId } = await params;
-  const asset = await fetchAsset(assetId);
+  const { assetId: shareToken } = await params;
+  const asset = await fetchSharedAsset(shareToken);
   if (!asset) return { title: "Gifgloo" };
 
-  const pageUrl = `${APP_URL}/result/${assetId}`;
+  const pageUrl = `${APP_URL}/result/${shareToken}`;
   const description = "AI로 내 얼굴을 GIF에 합성했어요. 나도 만들어봐요!";
 
   return {
@@ -51,9 +49,15 @@ export default async function ResultPage({
 }: {
   params: Promise<{ assetId: string }>;
 }) {
-  const { assetId } = await params;
-  const asset = await fetchAsset(assetId);
+  const { assetId: shareToken } = await params;
+  const asset = await fetchSharedAsset(shareToken);
   if (!asset) notFound();
 
-  return <ResultClient resultUrl={asset.result_url} assetId={assetId} />;
+  return (
+    <ResultClient
+      resultUrl={asset.result_url}
+      shareUrl={`${APP_URL}/result/${shareToken}`}
+      downloadUrl={`${API_BASE}/assets/shared/${shareToken}/download`}
+    />
+  );
 }

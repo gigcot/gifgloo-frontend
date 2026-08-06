@@ -4,5 +4,6 @@ export type CompositionJob = {
   source_gif_url: string;
   target_url: string;
   result_url: string | null;
+  result_asset_id: string | null;
   created_at: string;
 };
