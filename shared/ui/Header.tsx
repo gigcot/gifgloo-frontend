@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 type HeaderProps = {
   title?: string;
   showBack?: boolean;
@@ -21,10 +23,20 @@ export function Header({ title, showBack, action }: HeaderProps) {
           </button>
         )}
 
-        {title ? (
-          <h1 className="text-lg font-bold text-white">{title}</h1>
-        ) : (
-          <h1 className="text-2xl font-black tracking-tight text-purple-400">gifgloo</h1>
+        <Link
+          href="/"
+          className="shrink-0 text-2xl font-black tracking-tight text-purple-400 transition-colors hover:text-purple-300"
+        >
+          gifgloo
+        </Link>
+
+        {title && (
+          <>
+            <span className="hidden h-4 w-px shrink-0 bg-white/15 sm:block" />
+            <h1 className="min-w-0 truncate text-base font-bold text-white/85 sm:text-lg">
+              {title}
+            </h1>
+          </>
         )}
 
         {action && <div className="ml-auto">{action}</div>}
