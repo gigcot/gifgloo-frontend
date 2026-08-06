@@ -4,11 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/shared/lib/use-auth";
 import { API_BASE } from "@/shared/lib/api-base";
+import { currentPathForPaymentReturn, setPaymentReturnIntent } from "@/shared/lib/payment-return";
 
 const MENU_ITEMS = [
+  { label: "홈", href: "/" },
   { label: "내 에셋", href: "/my-assets" },
   { label: "결제 내역", href: "/coming-soon" },
-  { label: "크레딧 충전", href: "/coming-soon" },
+  { label: "크레딧 충전", href: "/payment/charge" },
   { label: "합성하기", href: "/compose" },
 ] as const;
 
@@ -30,7 +32,7 @@ export function UserMenu() {
   }, [open]);
 
   async function handleLogout() {
-    await authFetch(`${API_BASE}/auth/logout`, { method: "POST" }).catch(() => {});
+    await authFetch(`${API_BASE}/oauth/logout`, { method: "POST" });
     window.location.href = "/";
   }
 
@@ -50,7 +52,16 @@ export function UserMenu() {
           {MENU_ITEMS.map(({ label, href }) => (
             <button
               key={label}
-              onClick={() => { setOpen(false); router.push(href); }}
+              onClick={() => {
+                if (href === "/payment/charge") {
+                  setPaymentReturnIntent({
+                    href: currentPathForPaymentReturn(),
+                    label: "이전 화면으로 계속하기",
+                  });
+                }
+                setOpen(false);
+                router.push(href);
+              }}
               className="w-full px-4 py-3 text-left text-sm font-medium text-white/80 transition-colors hover:bg-white/5 hover:text-white"
             >
               {label}

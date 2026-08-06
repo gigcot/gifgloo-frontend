@@ -10,7 +10,10 @@ import { takePendingPhoto } from "@/features/compose/model/pending-photo";
 import { submitComposition } from "@/features/compose/model/compose-api";
 import type { Confirmation } from "@/features/compose/model/compose-api";
 import { ShareButton } from "@/shared/ui/ShareButton";
+import { API_BASE } from "@/shared/lib/api-base";
+import { downloadGif } from "@/shared/lib/download";
 import { GifSearchSheet } from "@/features/gif-search/ui/GifSearchSheet";
+import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
 
 type Stage = "ready" | "processing" | "done" | "error";
 
@@ -34,6 +37,7 @@ export function ComposePanel() {
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [showCreditConfirm, setShowCreditConfirm] = useState(false);
+  const [showInsufficientCredit, setShowInsufficientCredit] = useState(false);
   const [showGifSheet, setShowGifSheet] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
 
@@ -130,6 +134,10 @@ export function ComposePanel() {
       localStorage.setItem("pending_gif", JSON.stringify(gif));
       localStorage.setItem("pending_action", "compose");
       router.push("/");
+    } else if (result.type === "insufficient_credit") {
+      composingRef.current = false;
+      setStage("ready");
+      setShowInsufficientCredit(true);
     } else {
       composingRef.current = false;
       setError(result.message);
@@ -148,26 +156,37 @@ export function ComposePanel() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  function goChargeFromCompose() {
+    if (gif) {
+      localStorage.setItem("compose_gif", JSON.stringify(gif));
+    }
+    setPaymentReturnIntent({
+      href: "/compose",
+      label: "합성 계속하기",
+    });
+    router.push("/payment/charge");
+  }
+
   return (
     <>
     <main className="mx-auto max-w-screen-xl px-4 py-6">
 
       {/* ── 준비 상태 ── */}
       {stage === "ready" && (
-        <div className="flex flex-col gap-4">
-          <div className="flex gap-3">
+        <div className="mx-auto flex max-w-3xl flex-col gap-5">
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 rounded-3xl border border-white/10 bg-[#111113] p-3 shadow-2xl sm:p-4">
             {/* 선택한 GIF */}
             <div className="flex flex-1 flex-col gap-1.5">
-              <p className="text-xs font-semibold text-white/40">선택한 GIF</p>
+              <p className="text-xs font-semibold text-white/45">선택한 GIF</p>
               <button
                 onClick={() => setShowGifSheet(true)}
-                className="aspect-square w-full overflow-hidden rounded-2xl bg-white/5 transition-colors hover:bg-white/10"
+                className="aspect-square w-full overflow-hidden rounded-xl border border-white/10 bg-black transition-colors hover:border-purple-400/50"
               >
                 {gif ? (
                   <img src={getGifUrl(gif, "md")} alt="selected gif" className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
                       <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-white/60">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
@@ -180,7 +199,7 @@ export function ComposePanel() {
 
             {/* + 아이콘 */}
             <div className="flex items-center">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/40">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/40">
                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
@@ -189,7 +208,7 @@ export function ComposePanel() {
 
             {/* 내 사진 */}
             <div className="flex flex-1 flex-col gap-1.5">
-              <p className="text-xs font-semibold text-white/40">내 사진</p>
+              <p className="text-xs font-semibold text-white/45">내 사진</p>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -198,11 +217,11 @@ export function ComposePanel() {
                 onChange={handleFileChange}
               />
               {myPhoto ? (
-                <div className="relative aspect-square overflow-hidden rounded-2xl">
+                <div className="relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-black">
                   <img src={myPhoto} alt="my photo" className="h-full w-full object-cover" />
                   <button
                     onClick={clearPhoto}
-                    className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white backdrop-blur-sm hover:bg-black/80"
+                    className="absolute right-2 top-2 rounded-full border border-white/10 bg-black/70 p-1 text-white backdrop-blur-sm hover:bg-black"
                   >
                     <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -212,9 +231,9 @@ export function ComposePanel() {
               ) : (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/20 transition-colors hover:border-purple-500/60 hover:bg-purple-600/5"
+                  className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black transition-colors hover:border-purple-400/60 hover:bg-purple-500/10"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-white/60">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
@@ -232,7 +251,7 @@ export function ComposePanel() {
           <button
             onClick={() => setShowCreditConfirm(true)}
             disabled={!myPhoto || !gif}
-            className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white transition-all hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-30"
+            className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white shadow-lg shadow-purple-950/40 transition-all hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-30"
           >
             합성하기
           </button>
@@ -246,7 +265,7 @@ export function ComposePanel() {
           onClick={() => setShowCreditConfirm(false)}
         >
           <div
-            className="flex w-full max-w-sm flex-col gap-4 rounded-2xl bg-[#1a1a1a] p-8"
+            className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-[#111113] p-8 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-center text-base font-bold text-white">합성을 시작할까요?</p>
@@ -262,9 +281,41 @@ export function ComposePanel() {
               </button>
               <button
                 onClick={() => { setShowCreditConfirm(false); handleCompose(); }}
-                className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-700"
+                className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
               >
                 시작하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 크레딧 부족 안내 모달 ── */}
+      {showInsufficientCredit && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+          onClick={() => setShowInsufficientCredit(false)}
+        >
+          <div
+            className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-[#111113] p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-center text-base font-bold text-white">크레딧이 부족해요</p>
+            <p className="text-center text-sm leading-6 text-white/50">
+              합성을 시작하려면 크레딧이 필요합니다.<br />크레딧을 충전하시겠어요?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowInsufficientCredit(false)}
+                className="flex-1 rounded-full border border-white/20 py-3 text-sm font-medium text-white/60 transition-colors hover:border-white/40 hover:text-white"
+              >
+                나중에
+              </button>
+              <button
+                onClick={goChargeFromCompose}
+                className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
+              >
+                충전하기
               </button>
             </div>
           </div>
@@ -278,7 +329,7 @@ export function ComposePanel() {
           onClick={() => setConfirmation(null)}
         >
           <div
-            className="flex w-full max-w-sm flex-col gap-4 rounded-2xl bg-[#1a1a1a] p-8"
+            className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-[#111113] p-8 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-center text-base font-bold text-white">{confirmation.message}</p>
@@ -291,7 +342,7 @@ export function ComposePanel() {
               </button>
               <button
                 onClick={() => { setConfirmation(null); handleCompose(true); }}
-                className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-700"
+                className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
               >
                 네, 진행할게요
               </button>
@@ -336,33 +387,27 @@ export function ComposePanel() {
 
       {/* ── 완료 ── */}
       {stage === "done" && job.resultUrl && (
-        <div className="flex flex-col items-center gap-6">
-          <div className="w-full overflow-hidden rounded-2xl">
-            <img src={job.resultUrl} alt="합성 결과" className="w-full object-cover" />
+        <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6">
+          <div className="w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
+            <img src={job.resultUrl} alt="합성 결과" className="w-full object-contain" />
           </div>
 
           <div className="flex w-full flex-col gap-3">
             <button
-              onClick={() => {
-                if (!job.resultUrl) return;
-                const a = document.createElement("a");
-                a.href = job.resultUrl;
-                a.download = `gifgloo_${Date.now()}.gif`;
-                a.click();
-              }}
-              className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white transition-colors hover:bg-purple-700"
+              onClick={() => job.resultAssetId && downloadGif(`${API_BASE}/assets/${job.resultAssetId}/download`)}
+              disabled={!job.resultAssetId}
+              className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500"
             >
-              저장하기
+              다운로드
             </button>
             <div className="flex gap-2">
               <ShareButton
-                url={job.resultUrl!}
-                shareUrl={job.resultAssetId ? `${window.location.origin}/result/${job.resultAssetId}` : undefined}
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/20 py-3 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:text-white"
+                assetId={job.resultAssetId ?? undefined}
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
               />
               <button
                 onClick={handleReset}
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/20 py-3 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:text-white"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
               >
                 다시 만들기
               </button>

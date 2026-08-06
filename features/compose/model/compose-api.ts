@@ -12,6 +12,7 @@ export type SubmitResult =
   | { type: "job"; jobId: string }
   | { type: "confirmation"; confirmation: Confirmation }
   | { type: "auth_required" }
+  | { type: "insufficient_credit" }
   | { type: "error"; message: string };
 
 type AuthFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -55,6 +56,10 @@ export async function submitComposition(
 
       if (res.status === 401 || res.status === 403) {
         return { type: "auth_required" };
+      }
+
+      if (res.status === 402) {
+        return { type: "insufficient_credit" };
       }
 
       const friendlyMessage = STATUS_MESSAGES[res.status] ?? "합성에 실패했어요. 잠시 후 다시 시도해주세요.";
