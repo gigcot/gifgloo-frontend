@@ -12,7 +12,7 @@ import { NewUserWelcomeModal } from "@/features/auth/ui/NewUserWelcomeModal";
 import { HeaderActions } from "@/features/auth/ui/HeaderActions";
 import type { Gif } from "@/entities/gif/model";
 import { safeParseGif } from "@/entities/gif/model";
-import { fetchTrending } from "@/shared/api/klipy";
+import { fetchTrendingPage } from "@/shared/api/klipy";
 import { useAuth } from "@/shared/lib/use-auth";
 
 export default function Home() {
@@ -24,10 +24,17 @@ export default function Home() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [trendingGifs, setTrendingGifs] = useState<Gif[]>([]);
   const [trendingError, setTrendingError] = useState(false);
+  const [trendingPage, setTrendingPage] = useState(1);
+  const [trendingHasMore, setTrendingHasMore] = useState(false);
+  const [trendingLoadingMore, setTrendingLoadingMore] = useState(false);
 
   useEffect(() => {
-    fetchTrending(1, 24)
-      .then(setTrendingGifs)
+    fetchTrendingPage(1, 24)
+      .then((result) => {
+        setTrendingGifs(result.items);
+        setTrendingPage(result.currentPage);
+        setTrendingHasMore(result.hasNext);
+      })
       .catch(() => setTrendingError(true));
   }, []);
 
@@ -77,12 +84,26 @@ export default function Home() {
     setSelectedGif((prev) => (prev?.id === gif.id ? null : gif));
   }
 
+  function loadMoreTrending() {
+    if (trendingLoadingMore || !trendingHasMore) return;
+
+    setTrendingLoadingMore(true);
+    fetchTrendingPage(trendingPage + 1, 24)
+      .then((result) => {
+        setTrendingGifs((prev) => [...prev, ...result.items]);
+        setTrendingPage(result.currentPage);
+        setTrendingHasMore(result.hasNext);
+      })
+      .catch(() => setTrendingError(true))
+      .finally(() => setTrendingLoadingMore(false));
+  }
+
   return (
-    <div className="min-h-screen bg-[#0d0d0d] text-white">
+    <div className="min-h-screen bg-[#09090b] text-white">
       <Header action={<HeaderActions onLogin={() => setShowLogin(true)} />} />
       <TrendingShowcase gifs={trendingGifs.slice(0, 7)} onCompose={goCompose} />
 
-      <div className="bg-white/[0.03] px-4 py-5">
+      <div className="border-b border-white/10 bg-[#111113] px-4 py-5">
         <div className="mx-auto max-w-screen-xl">
           <p className="text-lg font-semibold text-white">합성할 GIF를 찾아보세요</p>
           <p className="mt-1 text-sm text-white/40">마음에 드는 GIF를 선택하고 내 사진과 합성해봐요</p>
@@ -95,7 +116,15 @@ export default function Home() {
         {trendingError && trendingGifs.length === 0 && !searchQuery ? (
           <p className="py-12 text-center text-white/40">GIF를 불러오지 못했어요. 새로고침해 주세요.</p>
         ) : (
-          <GifGrid query={searchQuery} trendingGifs={trendingGifs} selectedId={selectedGif?.id ?? null} onSelect={handleSelectGif} />
+          <GifGrid
+            query={searchQuery}
+            trendingGifs={trendingGifs}
+            trendingHasMore={trendingHasMore}
+            trendingLoadingMore={trendingLoadingMore}
+            selectedId={selectedGif?.id ?? null}
+            onSelect={handleSelectGif}
+            onLoadMoreTrending={loadMoreTrending}
+          />
         )}
       </main>
 

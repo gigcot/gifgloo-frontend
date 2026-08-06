@@ -46,6 +46,12 @@ type KlipyResponse = {
   };
 };
 
+export type GifPageResult = {
+  items: Gif[];
+  currentPage: number;
+  hasNext: boolean;
+};
+
 function mapItem(item: KlipyItem): Gif {
   return {
     id: item.slug,
@@ -56,7 +62,15 @@ function mapItem(item: KlipyItem): Gif {
   };
 }
 
-export async function fetchTrending(page = 1, perPage = 24): Promise<Gif[]> {
+function mapPage(json: KlipyResponse): GifPageResult {
+  return {
+    items: json.data.data.map(mapItem),
+    currentPage: json.data.current_page,
+    hasNext: json.data.has_next,
+  };
+}
+
+export async function fetchTrendingPage(page = 1, perPage = 24): Promise<GifPageResult> {
   const cid = getCustomerId();
   const res = await fetch(
     `/api/gif?type=trending&customer_id=${cid}&page=${page}&per_page=${perPage}`
@@ -66,18 +80,26 @@ export async function fetchTrending(page = 1, perPage = 24): Promise<Gif[]> {
   if (!json?.data?.data || !Array.isArray(json.data.data)) {
     throw new Error("Klipy trending: unexpected response shape");
   }
-  return (json as KlipyResponse).data.data.map(mapItem);
+  return mapPage(json as KlipyResponse);
 }
 
-export async function fetchSearch(q: string, page = 1): Promise<Gif[]> {
+export async function fetchTrending(page = 1, perPage = 24): Promise<Gif[]> {
+  return (await fetchTrendingPage(page, perPage)).items;
+}
+
+export async function fetchSearchPage(q: string, page = 1, perPage = 24): Promise<GifPageResult> {
   const cid = getCustomerId();
   const res = await fetch(
-    `/api/gif?type=search&q=${encodeURIComponent(q)}&customer_id=${cid}&page=${page}&per_page=24`
+    `/api/gif?type=search&q=${encodeURIComponent(q)}&customer_id=${cid}&page=${page}&per_page=${perPage}`
   );
   if (!res.ok) throw new Error(`Klipy search error: ${res.status}`);
   const json = await res.json();
   if (!json?.data?.data || !Array.isArray(json.data.data)) {
     throw new Error("Klipy search: unexpected response shape");
   }
-  return (json as KlipyResponse).data.data.map(mapItem);
+  return mapPage(json as KlipyResponse);
+}
+
+export async function fetchSearch(q: string, page = 1): Promise<Gif[]> {
+  return (await fetchSearchPage(q, page)).items;
 }

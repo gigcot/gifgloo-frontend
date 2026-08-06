@@ -20,14 +20,14 @@ function ConfirmModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-md sm:items-center"
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-sm rounded-t-3xl bg-[#1a1a1a] p-5 sm:rounded-3xl"
+        className="w-full max-w-sm rounded-t-3xl border border-white/10 bg-[#111113] p-5 shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 overflow-hidden rounded-2xl">
+        <div className="mb-4 overflow-hidden rounded-xl border border-white/10 bg-black">
           <img src={getGifUrl(gif, "md")} alt={gif.title} className="w-full object-cover" />
         </div>
         <p className="mb-1 text-center text-lg font-bold text-white">이 GIF로 합성해봐요!</p>
@@ -41,7 +41,7 @@ function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-700"
+            className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
           >
             네, 만들기
           </button>
@@ -82,16 +82,21 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
 
   return (
     <>
-      <section className="bg-purple-600 px-4 py-5">
+      <section className="bg-purple-600 px-4 py-6 sm:py-8">
         <div className="mx-auto max-w-screen-xl">
-          <p className="mb-3 text-2xl font-bold text-white">새로운 밈을 만들어봐요</p>
+          <div className="mb-4 flex flex-col gap-1">
+            <div>
+              <p className="text-2xl font-bold tracking-tight text-white sm:text-3xl">새로운 밈을 만들어봐요</p>
+              <p className="mt-1 text-sm text-white/70">움직이는 GIF에 내 사진을 얹어 바로 결과를 확인해요</p>
+            </div>
+          </div>
 
           {/* 모바일: 좌우 2열 */}
           <div className="flex gap-3 md:hidden">
             {/* 왼쪽: 트렌딩 슬라이드 */}
             <div className="flex flex-1 flex-col gap-2">
               <p className="text-xs font-semibold text-white/70">지금 많이 사용되는 GIF</p>
-              <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "1/1" }}>
+              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl" style={{ aspectRatio: "1/1" }}>
                 {allGifs.map((gif, i) => (
                   <div
                     key={gif.id}
@@ -109,7 +114,7 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
                     <div className="absolute bottom-3 left-3 right-3">
                       <button
                         onClick={() => setPreview(gif)}
-                        className="rounded-full bg-purple-800 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-900"
+                        className="rounded-full bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500"
                       >
                         나도 만들기
                       </button>
@@ -133,7 +138,7 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
             {/* 오른쪽: 결과물 예시 */}
             <div className="flex flex-1 flex-col gap-2">
               <p className="text-xs font-semibold text-white/70">이렇게 만들 수 있어요</p>
-              <div className="relative overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "1/1" }}>
+              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl" style={{ aspectRatio: "1/1" }}>
                 {FEATURED_RESULTS.map((item, i) => (
                   <div
                     key={i}
@@ -164,12 +169,12 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
             {/* 왼쪽: 트렌딩 2x2 그리드 */}
             <div className="flex flex-1 flex-col gap-2">
               <p className="text-xs font-semibold text-white/70">지금 많이 사용되는 GIF</p>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 {gridGifs.map((gif) => (
                   <div
                     key={gif.id}
                     onClick={() => setPreview(gif)}
-                    className="group relative cursor-pointer overflow-hidden rounded-lg"
+                    className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl"
                   >
                     <img
                       src={getGifUrl(gif, "sm")}
@@ -188,7 +193,7 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
             {/* 오른쪽: 결과물 예시 슬라이드 */}
             <div className="flex w-[38%] flex-col gap-2">
               <p className="text-xs font-semibold text-white/70">이렇게 만들 수 있어요</p>
-              <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-black">
+              <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl">
                 {FEATURED_RESULTS.map((item, i) => (
                   <div
                     key={i}
