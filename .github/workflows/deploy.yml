@@ -94,7 +94,7 @@ jobs:
 
           RELEASE_ID="${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}"
           ARCHIVE="frontend-${RELEASE_ID}.tar.gz"
-          RUNTIME_ENV=$(printf 'KLIPY_API_KEY=%s\nADMIN_PANEL_PATH=%s\n' "$KLIPY_API_KEY" "$ADMIN_PANEL_PATH" | base64 -w 0)
+          RUNTIME_ENV=$(printf 'KLIPY_API_KEY=%s\nADMIN_PANEL_PATH=%s\nAPP_REVISION=%s\n' "$KLIPY_API_KEY" "$ADMIN_PANEL_PATH" "$GITHUB_SHA" | base64 -w 0)
 
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
@@ -115,10 +115,61 @@ jobs:
             NEXT_LINK="\$APP_DIR/.current-$RELEASE_ID"
             ROLLBACK_LINK="\$APP_DIR/.rollback-$RELEASE_ID"
             PREVIOUS_RELEASE=""
+            PREVIOUS_REVISION=""
 
             if [ -L "\$CURRENT_LINK" ]; then
               PREVIOUS_RELEASE="\$(readlink -f "\$CURRENT_LINK")"
+              if [ -f "\$PREVIOUS_RELEASE/.env" ]; then
+                PREVIOUS_REVISION="\$(sed -n 's/^APP_REVISION=//p' "\$PREVIOUS_RELEASE/.env")"
+              fi
             fi
+
+            activate_release() {
+              revision="\$1"
+              pm2_state="\$(pm2 jlist | node -e '
+                let input = "";
+                process.stdin.on("data", (chunk) => input += chunk);
+                process.stdin.on("end", () => {
+                  const app = JSON.parse(input).find((item) => item.name === "gifgloo-frontend");
+                  if (app) process.stdout.write(app.pm2_env.exec_mode + "\t" + app.pm2_env.pm_exec_path);
+                });
+              ')"
+
+              if [ -z "\$pm2_state" ]; then
+                APP_REVISION="\$revision" pm2 start "\$APP_DIR/ecosystem.config.js" --env production --update-env
+                return
+              fi
+
+              IFS=\$'\t' read -r pm2_mode pm2_script <<< "\$pm2_state"
+              if [ "\$pm2_mode" != "cluster_mode" ] || [ "\$pm2_script" != "\$CURRENT_LINK/server.js" ]; then
+                pm2 delete gifgloo-frontend
+                APP_REVISION="\$revision" pm2 start "\$APP_DIR/ecosystem.config.js" --env production --update-env
+                return
+              fi
+
+              APP_REVISION="\$revision" pm2 reload "\$APP_DIR/ecosystem.config.js" --env production --update-env
+            }
+
+            verify_revision() {
+              expected_revision="\$1"
+              actual_revision=""
+
+              for attempt in {1..10}; do
+                if health_response="\$(curl --fail --silent --show-error http://127.0.0.1:3000/api/health)"; then
+                  if actual_revision="\$(printf '%s' "\$health_response" | node -e '
+                    let input = "";
+                    process.stdin.on("data", (chunk) => input += chunk);
+                    process.stdin.on("end", () => process.stdout.write(JSON.parse(input).revision));
+                  ')" && [ "\$actual_revision" = "\$expected_revision" ]; then
+                    return
+                  fi
+                fi
+                sleep 2
+              done
+
+              echo "Expected revision \$expected_revision, got \${actual_revision:-no response}" >&2
+              return 1
+            }
 
             rollback() {
               status=\$?
@@ -126,8 +177,7 @@ jobs:
               if [ -n "\$PREVIOUS_RELEASE" ] && [ -d "\$PREVIOUS_RELEASE" ]; then
                 ln -s "\$PREVIOUS_RELEASE" "\$ROLLBACK_LINK"
                 mv -Tf "\$ROLLBACK_LINK" "\$CURRENT_LINK"
-                cd "\$CURRENT_LINK"
-                pm2 startOrReload ecosystem.config.js --env production --update-env
+                activate_release "\$PREVIOUS_REVISION"
                 pm2 save
               fi
               exit "\$status"
@@ -139,17 +189,13 @@ jobs:
             tar -xzf "/tmp/$ARCHIVE" -C "\$RELEASE_DIR"
             printf '%s' "$RUNTIME_ENV" | base64 --decode > "\$RELEASE_DIR/.env"
             chmod 600 "\$RELEASE_DIR/.env"
+            cp "\$RELEASE_DIR/ecosystem.config.js" "\$APP_DIR/ecosystem.config.js"
 
             ln -s "\$RELEASE_DIR" "\$NEXT_LINK"
             mv -Tf "\$NEXT_LINK" "\$CURRENT_LINK"
 
-            cd "\$CURRENT_LINK"
-            pm2 startOrReload ecosystem.config.js --env production --update-env
-            curl --fail --silent --show-error \
-              --retry 10 \
-              --retry-connrefused \
-              --retry-delay 2 \
-              http://127.0.0.1:3000/ > /dev/null
+            activate_release "$GITHUB_SHA"
+            verify_revision "$GITHUB_SHA"
             pm2 save
 
             trap - ERR
