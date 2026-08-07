@@ -60,7 +60,6 @@ const FEATURED_RESULTS = [
 export function TrendingShowcase({ gifs, onCompose }: Props) {
   const allGifs = gifs.slice(0, 7);
   const gridGifs = gifs.slice(0, 4);
-  const slideGifs = gifs.slice(4, 7);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [featuredSlide, setFeaturedSlide] = useState(0);
   const [preview, setPreview] = useState<Gif | null>(null);

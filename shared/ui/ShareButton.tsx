@@ -34,7 +34,7 @@ export function ShareButton({ shareUrl, assetId, className }: Props) {
       await copyShareUrl(await getShareUrl());
       setMessage("링크 복사됨");
       setTimeout(() => setMessage(null), 2000);
-    } catch (e) {
+    } catch {
       setMessage("공유하지 못했어요");
       setTimeout(() => setMessage(null), 2000);
     }
