@@ -7,6 +7,8 @@ type Overview = {
   today_compositions: number;
   today_failed_compositions: number;
   today_payment_amount: number;
+  today_ready_payments: number;
+  today_ready_payment_amount: number;
   today_credit_grants: number;
   missing_credit_candidates: number;
 };
@@ -249,11 +251,17 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
         </p>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {[
-          ["오늘 합성 요청", overview?.today_compositions.toLocaleString() ?? "-"],
+          ["오늘 성공 합성", overview?.today_compositions.toLocaleString() ?? "-"],
           ["오늘 실패 작업", overview?.today_failed_compositions.toLocaleString() ?? "-"],
           ["오늘 결제 금액", overview ? formatWon(overview.today_payment_amount) : "-"],
+          [
+            "결제 확인 대기",
+            overview
+              ? `${overview.today_ready_payments.toLocaleString()}건 / ${formatWon(overview.today_ready_payment_amount)}`
+              : "-",
+          ],
           ["오늘 지급 크레딧", overview?.today_credit_grants.toLocaleString() ?? "-"],
           ["지급 누락 의심", overview?.missing_credit_candidates.toLocaleString() ?? "-"],
         ].map(([label, value]) => (

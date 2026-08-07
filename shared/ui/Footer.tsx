@@ -39,8 +39,9 @@ export function Footer() {
             <p>사용된 크레딧은 디지털 콘텐츠 특성상 환불이 제한될 수 있습니다.</p>
           </div>
           <div className="mt-5 space-y-1 text-xs leading-5 text-white/35">
-            <p>사업자 정보 준비 중</p>
-            <p>상호명 / 대표자 / 사업자등록번호 / 통신판매업 신고번호는 등록 완료 후 업데이트됩니다.</p>
+            <p>상호명: 부릉이상점</p>
+            <p>대표자: 이재호</p>
+            <p>사업자등록번호: 275-57-00990</p>
           </div>
         </div>
       </div>
