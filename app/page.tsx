@@ -41,7 +41,8 @@ export default function Home() {
   useEffect(() => {
     if (sessionStorage.getItem("is_new_user") === "true") {
       sessionStorage.removeItem("is_new_user");
-      setShowWelcome(true);
+      const timer = window.setTimeout(() => setShowWelcome(true), 0);
+      return () => window.clearTimeout(timer);
     }
   }, []);
 
@@ -61,8 +62,11 @@ export default function Home() {
       router.push("/compose");
     } else if (pendingGif) {
       const gif = safeParseGif(pendingGif);
-      if (gif) setSelectedGif(gif);
       localStorage.removeItem("pending_gif");
+      if (gif) {
+        const timer = window.setTimeout(() => setSelectedGif(gif), 0);
+        return () => window.clearTimeout(timer);
+      }
     }
   }, [checked, isLoggedIn, router]);
 

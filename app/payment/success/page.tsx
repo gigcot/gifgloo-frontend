@@ -13,11 +13,12 @@ export default function PaymentSuccessPage() {
   const [returnIntent, setReturnIntent] = useState<PaymentReturnIntent | null>(null);
 
   useEffect(() => {
-    setReturnIntent(getPaymentReturnIntent());
+    const timer = window.setTimeout(() => setReturnIntent(getPaymentReturnIntent()), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   function handleContinue() {
-    const href = returnIntent?.href ?? "/";
+    const href = (returnIntent ?? getPaymentReturnIntent())?.href ?? "/";
     clearPaymentReturnIntent();
     router.replace(href);
   }

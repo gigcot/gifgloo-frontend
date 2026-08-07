@@ -13,7 +13,7 @@ export function CallbackHandler() {
       sessionStorage.setItem("is_new_user", "true");
     }
     router.replace("/");
-  }, []);
+  }, [router, searchParams]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0d0d0d] text-white">

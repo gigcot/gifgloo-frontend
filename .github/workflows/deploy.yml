@@ -3,29 +3,81 @@ name: Deploy to EC2
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-deploy:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_API_BASE: https://api.example.com
+      NEXT_PUBLIC_APP_URL: https://example.com
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - run: npm ci
-      - run: npm run build
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: env
+    concurrency:
+      group: gifgloo-frontend-production
+      cancel-in-progress: false
+    env:
+      NEXT_PUBLIC_API_BASE: ${{ vars.NEXT_PUBLIC_API_BASE }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate production configuration
+        run: |
+          test -n "$NEXT_PUBLIC_API_BASE"
+          test -n "$NEXT_PUBLIC_APP_URL"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production application
+        run: npm run build
 
       - name: Package build artifacts
         run: |
-          tar -czf deploy.tar.gz \
-            .next/standalone \
-            .next/static \
-            public \
-            package.json
+          mkdir -p release/.next
+          cp -R .next/standalone/. release/
+          cp -R .next/static release/.next/static
+          cp -R public release/public
+          cp ecosystem.config.js release/ecosystem.config.js
+          tar -czf "frontend-${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}.tar.gz" -C release .
 
       - name: Deploy to EC2
         env:
@@ -33,34 +85,83 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
           KLIPY_API_KEY: ${{ secrets.KLIPY_API_KEY }}
+          ADMIN_PANEL_PATH: ${{ secrets.ADMIN_PANEL_PATH }}
         run: |
+          test -n "$SSH_KEY"
+          test -n "$EC2_HOST"
+          test -n "$EC2_USER"
+          test -n "$KLIPY_API_KEY"
+
+          RELEASE_ID="${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}"
+          ARCHIVE="frontend-${RELEASE_ID}.tar.gz"
+          RUNTIME_ENV=$(printf 'KLIPY_API_KEY=%s\nADMIN_PANEL_PATH=%s\n' "$KLIPY_API_KEY" "$ADMIN_PANEL_PATH" | base64 -w 0)
+
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
-          scp -i ~/.ssh/deploy_key deploy.tar.gz "$EC2_USER@$EC2_HOST:/tmp/deploy.tar.gz"
+          scp -i ~/.ssh/deploy_key "$ARCHIVE" "$EC2_USER@$EC2_HOST:/tmp/$ARCHIVE"
 
           ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << DEPLOY
-            set -e
-            APP_DIR=~/gifgloo-frontend
+            set -Eeuo pipefail
 
-            mkdir -p \$APP_DIR
-            cd \$APP_DIR
+            mkdir -p ~/gifgloo-frontend
+            cd ~/gifgloo-frontend
+            APP_DIR="\$(pwd -P)"
+            RELEASES_DIR="\$APP_DIR/releases"
+            RELEASE_DIR="\$RELEASES_DIR/$RELEASE_ID"
+            CURRENT_LINK="\$APP_DIR/current"
+            NEXT_LINK="\$APP_DIR/.current-$RELEASE_ID"
+            ROLLBACK_LINK="\$APP_DIR/.rollback-$RELEASE_ID"
+            PREVIOUS_RELEASE=""
 
-            tar -xzf /tmp/deploy.tar.gz
-            rm /tmp/deploy.tar.gz
+            if [ -L "\$CURRENT_LINK" ]; then
+              PREVIOUS_RELEASE="\$(readlink -f "\$CURRENT_LINK")"
+            fi
 
-            # Copy static files to standalone
-            cp -r .next/static .next/standalone/.next/
-            cp -r public .next/standalone/
+            rollback() {
+              status=\$?
+              trap - ERR
+              if [ -n "\$PREVIOUS_RELEASE" ] && [ -d "\$PREVIOUS_RELEASE" ]; then
+                ln -s "\$PREVIOUS_RELEASE" "\$ROLLBACK_LINK"
+                mv -Tf "\$ROLLBACK_LINK" "\$CURRENT_LINK"
+                cd "\$CURRENT_LINK"
+                pm2 startOrReload ecosystem.config.js --env production --update-env
+                pm2 save
+              fi
+              exit "\$status"
+            }
+            trap rollback ERR
 
-            # Write env file
-            echo "KLIPY_API_KEY=${KLIPY_API_KEY}" > .next/standalone/.env
+            mkdir -p "\$RELEASES_DIR"
+            mkdir "\$RELEASE_DIR"
+            tar -xzf "/tmp/$ARCHIVE" -C "\$RELEASE_DIR"
+            printf '%s' "$RUNTIME_ENV" | base64 --decode > "\$RELEASE_DIR/.env"
+            chmod 600 "\$RELEASE_DIR/.env"
 
-            # Restart with PM2
-            cd .next/standalone
-            pm2 delete gifgloo-frontend 2>/dev/null || true
-            PORT=3000 pm2 start server.js --name gifgloo-frontend
+            ln -s "\$RELEASE_DIR" "\$NEXT_LINK"
+            mv -Tf "\$NEXT_LINK" "\$CURRENT_LINK"
+
+            cd "\$CURRENT_LINK"
+            pm2 startOrReload ecosystem.config.js --env production --update-env
+            curl --fail --silent --show-error \
+              --retry 10 \
+              --retry-connrefused \
+              --retry-delay 2 \
+              http://127.0.0.1:3000/ > /dev/null
             pm2 save
+
+            trap - ERR
+            rm "/tmp/$ARCHIVE"
+
+            find "\$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+              | sort -nr \
+              | tail -n +6 \
+              | cut -d' ' -f2- \
+              | while IFS= read -r old_release; do
+                  if [ "\$old_release" != "\$(readlink -f "\$CURRENT_LINK")" ]; then
+                    rm -rf -- "\$old_release"
+                  fi
+                done
           DEPLOY

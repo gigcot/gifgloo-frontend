@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE } from "@/shared/lib/api-base";
 
 type Overview = {
@@ -116,7 +116,7 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
 
   const endpoint = useMemo(() => `${API_BASE}${adminPath}`, [adminPath]);
 
-  async function loadOverview() {
+  const loadOverview = useCallback(async () => {
     setOverviewError(null);
     try {
       const res = await fetch(`${endpoint}/overview`, { credentials: "include" });
@@ -128,7 +128,7 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
     } catch {
       setOverviewError("요청을 처리하지 못했습니다");
     }
-  }
+  }, [endpoint]);
 
   async function searchCreditCase(nextQuery = query) {
     const trimmed = nextQuery.trim();
@@ -239,7 +239,7 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
 
   useEffect(() => {
     loadOverview();
-  }, [endpoint]);
+  }, [loadOverview]);
 
   return (
     <main className="mx-auto flex max-w-screen-xl flex-col gap-6 px-4 py-8">

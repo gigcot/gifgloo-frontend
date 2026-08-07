@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Gif } from "@/entities/gif/model";
 import { getGifUrl, safeParseGif } from "@/entities/gif/model";
@@ -47,20 +47,33 @@ export function ComposePanel() {
 
   const job = useCompositionJob(jobId);
 
+  const setPhotoFromFile = useCallback((file: File) => {
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    const url = URL.createObjectURL(file);
+    objectUrlRef.current = url;
+    setPhotoFile(file);
+    setMyPhoto(url);
+  }, []);
+
   // GIF 복원 (로그인 전 선택 → 로그인 후 자동 진입)
   useEffect(() => {
     const saved = localStorage.getItem("compose_gif");
     if (!saved) return;
     const gif = safeParseGif(saved);
-    if (gif) setGif(gif);
     localStorage.removeItem("compose_gif");
+    if (gif) {
+      const timer = window.setTimeout(() => setGif(gif), 0);
+      return () => window.clearTimeout(timer);
+    }
   }, []);
 
   // 메인 페이지 ComposeBar에서 사진 올리기로 진입한 경우
   useEffect(() => {
     const file = takePendingPhoto();
-    if (file) setPhotoFromFile(file);
-  }, []);
+    if (!file) return;
+    const timer = window.setTimeout(() => setPhotoFromFile(file), 0);
+    return () => window.clearTimeout(timer);
+  }, [setPhotoFromFile]);
 
   // object URL 컴포넌트 언마운트 시 정리
   useEffect(() => {
@@ -69,26 +82,8 @@ export function ComposePanel() {
     };
   }, []);
 
-  // 잡 완료 → done 전환
-  useEffect(() => {
-    if (job.isComplete) setStage("done");
-  }, [job.isComplete]);
-
-  // 잡 실패 → error 전환
-  useEffect(() => {
-    if (job.isFailed) {
-      setError(job.failedReason);
-      setStage("error");
-    }
-  }, [job.isFailed, job.failedReason]);
-
-  function setPhotoFromFile(file: File) {
-    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-    const url = URL.createObjectURL(file);
-    objectUrlRef.current = url;
-    setPhotoFile(file);
-    setMyPhoto(url);
-  }
+  const visibleStage = job.isComplete ? "done" : job.isFailed ? "error" : stage;
+  const visibleError = job.isFailed ? job.failedReason : error;
 
   function clearPhoto() {
     if (objectUrlRef.current) {
@@ -172,7 +167,7 @@ export function ComposePanel() {
     <main className="mx-auto max-w-screen-xl px-4 py-6">
 
       {/* ── 준비 상태 ── */}
-      {stage === "ready" && (
+      {visibleStage === "ready" && (
         <div className="mx-auto flex max-w-3xl flex-col gap-5">
           <div className="grid grid-cols-[1fr_auto_1fr] gap-3 rounded-3xl border border-white/10 bg-[#111113] p-3 shadow-2xl sm:p-4">
             {/* 선택한 GIF */}
@@ -352,7 +347,7 @@ export function ComposePanel() {
       )}
 
       {/* ── 처리 중 ── */}
-      {stage === "processing" && (
+      {visibleStage === "processing" && (
         <div className="flex flex-col items-center gap-8 py-16">
           {/* GIF + 내 사진 미리보기 */}
           <div className="flex items-center gap-3">
@@ -386,7 +381,7 @@ export function ComposePanel() {
       )}
 
       {/* ── 완료 ── */}
-      {stage === "done" && job.resultUrl && (
+      {visibleStage === "done" && job.resultUrl && (
         <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6">
           <div className="w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
             <img src={job.resultUrl} alt="합성 결과" className="w-full object-contain" />
@@ -417,9 +412,9 @@ export function ComposePanel() {
       )}
 
       {/* ── 에러 ── */}
-      {stage === "error" && (
+      {visibleStage === "error" && (
         <div className="flex flex-col items-center gap-6 py-16">
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-400">{visibleError}</p>
           <button
             onClick={handleReset}
             className="rounded-full border border-white/20 px-8 py-3 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:text-white"

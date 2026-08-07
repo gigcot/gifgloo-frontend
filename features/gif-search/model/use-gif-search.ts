@@ -22,19 +22,11 @@ export function useGifSearch(query: string): UseGifSearchResult {
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
-    if (!query) {
-      setResults([]);
-      setError(false);
-      setLoading(false);
-      setLoadingMore(false);
-      setHasMore(false);
-      setPage(1);
-      return;
-    }
+    if (!query) return;
 
-    setLoading(true);
-    setError(false);
     const timer = setTimeout(() => {
+      setLoading(true);
+      setError(false);
       fetchSearchPage(query, 1)
         .then((result) => {
           setResults(result.items);
@@ -67,6 +59,17 @@ export function useGifSearch(query: string): UseGifSearchResult {
       .catch(() => setError(true))
       .finally(() => setLoadingMore(false));
   }, [hasMore, loading, loadingMore, page, query]);
+
+  if (!query) {
+    return {
+      results: [],
+      loading: false,
+      loadingMore: false,
+      error: false,
+      hasMore: false,
+      loadMore,
+    };
+  }
 
   return { results, loading, loadingMore, error, hasMore, loadMore };
 }

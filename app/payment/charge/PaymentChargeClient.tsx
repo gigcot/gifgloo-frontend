@@ -36,10 +36,7 @@ function CreditCountPreview({
   const [displayed, setDisplayed] = useState(current);
 
   useEffect(() => {
-    if (!active) {
-      setDisplayed(current);
-      return;
-    }
+    if (!active) return;
 
     const startedAt = performance.now();
     const durationMs = 700;
@@ -58,12 +55,14 @@ function CreditCountPreview({
     return () => cancelAnimationFrame(frameId);
   }, [active, current, next]);
 
+  const visibleCount = active ? displayed : current;
+
   return (
     <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
       <p className="text-xs font-semibold text-white/35">충전 후 예상 크레딧</p>
       <div className="mt-2 flex items-end gap-3">
         <span className="text-2xl font-black tabular-nums text-white">
-          {displayed.toLocaleString()}
+          {visibleCount.toLocaleString()}
         </span>
         <span className="pb-1 text-sm font-semibold text-purple-200">
           / {next.toLocaleString()} 크레딧
@@ -100,7 +99,7 @@ export function PaymentChargeClient() {
     setCheckoutProductId(productId);
     try {
       const checkout = await createPaymentCheckout(authFetch, productId);
-      window.location.href = checkout.checkout_page;
+      window.location.assign(checkout.checkout_page);
     } catch (error) {
       setState({
         status: "error",

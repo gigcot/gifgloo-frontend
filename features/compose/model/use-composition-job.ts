@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { API_BASE } from "@/shared/lib/api-base";
 
 type ProcessingStage =
@@ -46,23 +46,36 @@ const IDLE: CompositionJobState = {
   failedReason: null,
 };
 
+const WAITING: CompositionJobState = {
+  ...IDLE,
+  progress: 5,
+  statusMessage: "대기 중…",
+};
+
+type JobSnapshot = {
+  jobId: string;
+  state: CompositionJobState;
+};
+
 export function useCompositionJob(jobId: string | null): CompositionJobState {
-  const [state, setState] = useState<CompositionJobState>(IDLE);
-  const esRef = useRef<EventSource | null>(null);
+  const [snapshot, setSnapshot] = useState<JobSnapshot | null>(null);
 
   useEffect(() => {
-    if (!jobId) {
-      setState(IDLE);
-      return;
-    }
+    if (!jobId) return;
+    const activeJobId = jobId;
 
-    esRef.current?.close();
-    setState({ ...IDLE, statusMessage: "대기 중…", progress: 5 });
-
-    const es = new EventSource(`${API_BASE}/compositions/${jobId}/status`, {
+    const es = new EventSource(`${API_BASE}/compositions/${activeJobId}/status`, {
       withCredentials: true,
     });
-    esRef.current = es;
+
+    function updateState(
+      update: (current: CompositionJobState) => CompositionJobState,
+    ) {
+      setSnapshot((current) => ({
+        jobId: activeJobId,
+        state: update(current?.jobId === activeJobId ? current.state : WAITING),
+      }));
+    }
 
     es.onmessage = (ev) => {
       let data: RawJobStatus;
@@ -73,33 +86,36 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
       }
 
       if (data.status === "PENDING") {
-        setState((s) => ({ ...s, statusMessage: "대기 중…", progress: 5 }));
+        setSnapshot({ jobId: activeJobId, state: WAITING });
         return;
       }
 
       if (data.status === "PROCESSING" && data.stage) {
         const { message, progress } = STAGE_INFO[data.stage];
-        setState((s) => ({ ...s, statusMessage: message, progress }));
+        updateState((current) => ({ ...current, statusMessage: message, progress }));
         return;
       }
 
       if (data.status === "COMPLETED" && data.result_url) {
-        setState({
-          progress: 100,
-          statusMessage: "완료!",
-          resultUrl: data.result_url,
-          resultAssetId: data.result_asset_id,
-          isComplete: true,
-          isFailed: false,
-          failedReason: null,
+        setSnapshot({
+          jobId: activeJobId,
+          state: {
+            progress: 100,
+            statusMessage: "완료!",
+            resultUrl: data.result_url,
+            resultAssetId: data.result_asset_id,
+            isComplete: true,
+            isFailed: false,
+            failedReason: null,
+          },
         });
         es.close();
         return;
       }
 
       if (data.status === "FAILED") {
-        setState((s) => ({
-          ...s,
+        updateState((current) => ({
+          ...current,
           isFailed: true,
           failedReason: "합성 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.",
         }));
@@ -108,8 +124,8 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
     };
 
     es.onerror = () => {
-      setState((s) => ({
-        ...s,
+      updateState((current) => ({
+        ...current,
         isFailed: true,
         failedReason: "서버 연결이 끊어졌어요",
       }));
@@ -121,5 +137,6 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
     };
   }, [jobId]);
 
-  return state;
+  if (!jobId) return IDLE;
+  return snapshot?.jobId === jobId ? snapshot.state : WAITING;
 }
