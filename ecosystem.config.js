@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: "gifgloo-frontend",
-      script: "server.js",
-      cwd: __dirname,
+      script: `${__dirname}/current/server.js`,
+      cwd: `${__dirname}/current`,
       instances: 1,
       exec_mode: "cluster",
       autorestart: true,
@@ -12,6 +12,7 @@ module.exports = {
       env_production: {
         NODE_ENV: "production",
         PORT: 3000,
+        APP_REVISION: process.env.APP_REVISION,
       },
     },
   ],
