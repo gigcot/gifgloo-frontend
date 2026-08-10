@@ -16,6 +16,21 @@ type RawJobStatus = {
   result_url: string | null;
   result_asset_id: string | null;
   failed_reason: string | null;
+  credit_settlement?: RawCreditSettlement | null;
+};
+
+type RawCreditSettlement = {
+  balance_before: number;
+  charged: number;
+  refunded: number;
+  balance_after: number;
+};
+
+export type CreditSettlement = {
+  balanceBefore: number;
+  charged: number;
+  refunded: number;
+  balanceAfter: number;
 };
 
 export type CompositionJobState = {
@@ -25,6 +40,8 @@ export type CompositionJobState = {
   resultAssetId: string | null;
   isComplete: boolean;
   isFailed: boolean;
+  creditRestored: boolean;
+  creditSettlement: CreditSettlement | null;
   failedReason: string | null;
 };
 
@@ -43,6 +60,8 @@ const IDLE: CompositionJobState = {
   resultAssetId: null,
   isComplete: false,
   isFailed: false,
+  creditRestored: false,
+  creditSettlement: null,
   failedReason: null,
 };
 
@@ -56,6 +75,25 @@ type JobSnapshot = {
   jobId: string;
   state: CompositionJobState;
 };
+
+function parseCreditSettlement(value: RawCreditSettlement | null | undefined): CreditSettlement | null {
+  if (!value) return null;
+  if (
+    !Number.isInteger(value.balance_before) || value.balance_before < 0 ||
+    !Number.isInteger(value.charged) || value.charged < 0 ||
+    !Number.isInteger(value.refunded) || value.refunded < 0 ||
+    !Number.isInteger(value.balance_after) || value.balance_after < 0
+  ) {
+    return null;
+  }
+
+  return {
+    balanceBefore: value.balance_before,
+    charged: value.charged,
+    refunded: value.refunded,
+    balanceAfter: value.balance_after,
+  };
+}
 
 export function useCompositionJob(jobId: string | null): CompositionJobState {
   const [snapshot, setSnapshot] = useState<JobSnapshot | null>(null);
@@ -106,6 +144,8 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
             resultAssetId: data.result_asset_id,
             isComplete: true,
             isFailed: false,
+            creditRestored: false,
+            creditSettlement: parseCreditSettlement(data.credit_settlement),
             failedReason: null,
           },
         });
@@ -114,10 +154,13 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
       }
 
       if (data.status === "FAILED") {
+        const creditSettlement = parseCreditSettlement(data.credit_settlement);
         updateState((current) => ({
           ...current,
           isFailed: true,
-          failedReason: "합성 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.",
+          creditRestored: creditSettlement !== null && creditSettlement.refunded > 0,
+          creditSettlement,
+          failedReason: "작업에 실패했습니다. 다시 시도해주세요.",
         }));
         es.close();
       }
@@ -127,7 +170,9 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
       updateState((current) => ({
         ...current,
         isFailed: true,
-        failedReason: "서버 연결이 끊어졌어요",
+        creditRestored: false,
+        creditSettlement: null,
+        failedReason: "서버 연결이 끊어졌어요. 작업 상태는 내 결과물에서 확인해주세요.",
       }));
       es.close();
     };
