@@ -21,11 +21,11 @@ type Props = {
 export function ComposeBar({ selectedGif, onCompose }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!ACCEPTED_IMAGE_TYPES.has(file.type)) return;
-    setPendingPhoto(file);
+    await setPendingPhoto(file);
     onCompose();
   }
 

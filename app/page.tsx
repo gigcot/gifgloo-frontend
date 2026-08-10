@@ -71,13 +71,16 @@ export default function Home() {
   }, [checked, isLoggedIn, router]);
 
   async function goCompose(gif?: Gif) {
+    const gifToUse = gif ?? selectedGif;
     const loggedIn = await checkAuth();
     if (!loggedIn) {
       localStorage.setItem("pending_action", "compose");
+      if (gifToUse) {
+        localStorage.setItem("pending_gif", JSON.stringify(gifToUse));
+      }
       setShowLogin(true);
       return;
     }
-    const gifToUse = gif ?? selectedGif;
     if (gifToUse) {
       localStorage.setItem("compose_gif", JSON.stringify(gifToUse));
     }

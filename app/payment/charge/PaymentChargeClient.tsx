@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Header } from "@/shared/ui/Header";
 import { HeaderActions } from "@/features/auth/ui/HeaderActions";
@@ -119,6 +120,20 @@ export function PaymentChargeClient() {
           크레딧은 GIF 합성 작업에 사용됩니다. 결제가 완료되면 계정에 크레딧이 지급됩니다.
         </p>
 
+        <section className="mt-6 rounded-2xl border border-purple-400/20 bg-purple-500/[0.06] p-5 text-sm leading-6 text-white/60">
+          <p className="font-semibold text-white">현재 제공 중인 서비스</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>업로드한 사진 1장과 선택한 GIF를 AI로 합성해 새로운 GIF 결과물을 제작합니다.</li>
+            <li>OpenAI GPT Image 1.5 기반 기술을 사용하며, 작업 1회에 10크레딧이 사용됩니다.</li>
+            <li>GIF는 최대 20프레임으로 처리되며, 작업은 통상 2~3분 소요됩니다.</li>
+            <li>완료된 결과물은 내 에셋에서 확인, 다운로드 및 공유할 수 있습니다.</li>
+            <li>결과물 수정 기능은 현재 제공하지 않습니다.</li>
+          </ul>
+          <Link href="/service-guide" className="mt-3 inline-block font-semibold text-purple-200 underline underline-offset-4 hover:text-white">
+            서비스·이용 기준 자세히 보기
+          </Link>
+        </section>
+
         <section className="mt-8">
           {state.status === "loading" && (
             <div className="rounded-2xl border border-white/10 bg-[#111113] p-6">
@@ -177,6 +192,9 @@ export function PaymentChargeClient() {
 
         <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm leading-6 text-white/45">
           <p>결제 완료 후 크레딧 반영까지 잠시 걸릴 수 있습니다.</p>
+          <p className="mt-3">
+            결제 전 <Link href="/terms" className="underline hover:text-white">이용약관</Link>, <Link href="/privacy" className="underline hover:text-white">개인정보처리방침</Link>, <Link href="/refund" className="underline hover:text-white">결제 및 환불정책</Link>, <Link href="/credits-policy" className="underline hover:text-white">크레딧 정책</Link>을 확인해주세요.
+          </p>
         </div>
       </main>
     </div>

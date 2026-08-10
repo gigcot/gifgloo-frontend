@@ -6,7 +6,7 @@ import type { Gif } from "@/entities/gif/model";
 import { getGifUrl, safeParseGif } from "@/entities/gif/model";
 import { useAuth } from "@/shared/lib/use-auth";
 import { useCompositionJob } from "@/features/compose/model/use-composition-job";
-import { takePendingPhoto } from "@/features/compose/model/pending-photo";
+import { clearPendingPhoto, getPendingPhoto } from "@/features/compose/model/pending-photo";
 import { submitComposition } from "@/features/compose/model/compose-api";
 import type { Confirmation } from "@/features/compose/model/compose-api";
 import { ShareButton } from "@/shared/ui/ShareButton";
@@ -14,8 +14,14 @@ import { API_BASE } from "@/shared/lib/api-base";
 import { downloadGif } from "@/shared/lib/download";
 import { GifSearchSheet } from "@/features/gif-search/ui/GifSearchSheet";
 import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
+import { fetchCreditBalance } from "@/features/credits/model/use-credits";
 
 type Stage = "ready" | "processing" | "done" | "error";
+
+type CreditSnapshot = {
+  before: number;
+  after: number | null;
+};
 
 const ACCEPTED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -40,6 +46,7 @@ export function ComposePanel() {
   const [showInsufficientCredit, setShowInsufficientCredit] = useState(false);
   const [showGifSheet, setShowGifSheet] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [creditSnapshot, setCreditSnapshot] = useState<CreditSnapshot | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -60,19 +67,31 @@ export function ComposePanel() {
     const saved = localStorage.getItem("compose_gif");
     if (!saved) return;
     const gif = safeParseGif(saved);
-    localStorage.removeItem("compose_gif");
     if (gif) {
-      const timer = window.setTimeout(() => setGif(gif), 0);
+      const timer = window.setTimeout(() => {
+        setGif(gif);
+        if (localStorage.getItem("compose_gif") === saved) {
+          localStorage.removeItem("compose_gif");
+        }
+      }, 0);
       return () => window.clearTimeout(timer);
     }
+    localStorage.removeItem("compose_gif");
   }, []);
 
   // 메인 페이지 ComposeBar에서 사진 올리기로 진입한 경우
   useEffect(() => {
-    const file = takePendingPhoto();
-    if (!file) return;
-    const timer = window.setTimeout(() => setPhotoFromFile(file), 0);
-    return () => window.clearTimeout(timer);
+    let cancelled = false;
+
+    getPendingPhoto().then((file) => {
+      if (cancelled || !file) return;
+      setPhotoFromFile(file);
+      void clearPendingPhoto(file);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [setPhotoFromFile]);
 
   // object URL 컴포넌트 언마운트 시 정리
@@ -84,6 +103,26 @@ export function ComposePanel() {
 
   const visibleStage = job.isComplete ? "done" : job.isFailed ? "error" : stage;
   const visibleError = job.isFailed ? job.failedReason : error;
+  const displayedBalanceBefore = job.creditSettlement?.balanceBefore ?? creditSnapshot?.before ?? null;
+  const displayedCharged = job.creditSettlement?.charged ?? 10;
+  const displayedRefunded = job.creditSettlement?.refunded ?? (job.creditRestored ? 10 : 0);
+  const displayedBalanceAfter = job.creditSettlement?.balanceAfter ?? creditSnapshot?.after ?? null;
+
+  useEffect(() => {
+    if ((visibleStage !== "done" && visibleStage !== "error") || !creditSnapshot || creditSnapshot.after !== null) return;
+
+    let cancelled = false;
+    fetchCreditBalance(authFetch)
+      .then((balance) => {
+        if (cancelled) return;
+        setCreditSnapshot((current) => current ? { ...current, after: balance } : current);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, creditSnapshot, visibleStage]);
 
   function clearPhoto() {
     if (objectUrlRef.current) {
@@ -117,6 +156,13 @@ export function ComposePanel() {
     setError(null);
     setConfirmation(null);
 
+    try {
+      const balance = await fetchCreditBalance(authFetch);
+      setCreditSnapshot({ before: balance, after: null });
+    } catch {
+      setCreditSnapshot(null);
+    }
+
     const result = await submitComposition(authFetch, gif, photoFile, confirmed);
 
     if (result.type === "job") {
@@ -147,6 +193,7 @@ export function ComposePanel() {
     setError(null);
     setConfirmation(null);
     setFileError(null);
+    setCreditSnapshot(null);
     setJobId(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -264,8 +311,11 @@ export function ComposePanel() {
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-center text-base font-bold text-white">합성을 시작할까요?</p>
-            <p className="text-center text-sm text-white/50">
-              합성 작업 시작 시 크레딧이 차감되며<br />AI는 정확하지 않을 수 있습니다.
+            <p className="text-center text-sm leading-6 text-white/50">
+              현재 GIF 이미지 합성은 10크레딧이 사용되며<br />크레딧 차감 후 AI 합성 작업이 시작됩니다.<br />통상 2~3분 내 결과물이 제공됩니다.
+            </p>
+            <p className="rounded-xl bg-white/[0.04] px-4 py-3 text-center text-xs leading-5 text-white/45">
+              작업 시작 후에는 중도 취소 기능을 제공하지 않으며, 단순 변심에 의한 사용 크레딧 복구 및 환불이 제한됩니다.
             </p>
             <div className="flex gap-2">
               <button
@@ -387,6 +437,25 @@ export function ComposePanel() {
             <img src={job.resultUrl} alt="합성 결과" className="w-full object-contain" />
           </div>
 
+          {displayedBalanceBefore !== null && (
+            <div className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-[#111113] p-4 text-center">
+              <div>
+                <p className="text-xs text-white/40">기존 크레딧</p>
+                <p className="mt-1 font-bold text-white">{displayedBalanceBefore.toLocaleString()}</p>
+              </div>
+              <div className="border-x border-white/10">
+                <p className="text-xs text-white/40">사용 크레딧</p>
+                <p className="mt-1 font-bold text-purple-300">-{displayedCharged.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-white/40">작업 후 크레딧</p>
+                <p className="mt-1 font-bold text-white">
+                  {displayedBalanceAfter === null ? "확인 중" : displayedBalanceAfter.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex w-full flex-col gap-3">
             <button
               onClick={() => job.resultAssetId && downloadGif(`${API_BASE}/assets/${job.resultAssetId}/download`)}
@@ -413,8 +482,36 @@ export function ComposePanel() {
 
       {/* ── 에러 ── */}
       {visibleStage === "error" && (
-        <div className="flex flex-col items-center gap-6 py-16">
-          <p className="text-sm text-red-400">{visibleError}</p>
+        <div className="mx-auto flex max-w-lg flex-col items-center gap-6 py-16 text-center">
+          <div>
+            <h2 className="text-lg font-bold text-white">작업에 실패했습니다</h2>
+            <p className="mt-2 text-sm text-red-300">{visibleError}</p>
+          </div>
+          {job.creditRestored && (
+            <div className="w-full rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+              <p className="font-semibold text-emerald-200">
+                차감된 {displayedRefunded.toLocaleString()}크레딧은 복구되었습니다.
+              </p>
+              {displayedBalanceBefore !== null && (
+                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-emerald-400/15 pt-3 text-xs">
+                  <div>
+                    <p className="text-white/40">작업 전</p>
+                    <p className="mt-1 font-bold text-white">{displayedBalanceBefore.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/40">복구</p>
+                    <p className="mt-1 font-bold text-emerald-300">+{displayedRefunded.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/40">작업 후 크레딧</p>
+                    <p className="mt-1 font-bold text-white">
+                      {displayedBalanceAfter === null ? "확인 중" : displayedBalanceAfter.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={handleReset}
             className="rounded-full border border-white/20 px-8 py-3 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:text-white"
