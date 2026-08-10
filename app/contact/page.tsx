@@ -4,11 +4,13 @@ export default function ContactPage() {
   return (
     <PolicyPage
       title="문의"
-      description="서비스 이용, 결제, 환불, 크레딧 문제를 접수하는 페이지입니다."
     >
-      <p>문의 이메일: support@gifgloo.com</p>
+      <p>서비스 이용에 관한 문의 및 건의사항은 support@gifgloo.com 또는 010-9109-3066으로 접수해주세요.</p>
       <p className="mt-4">
-        결제 오류, 크레딧 미지급, 생성 실패 문의는 계정 이메일과 작업 시간을 함께 보내주시면 확인이 빨라집니다.
+        환불, 작업 실패, 크레딧 관련 문의는 가입한 계정 이메일과 발생한 상황을 함께 적어주시면 더 빠르게 확인할 수 있습니다.
+      </p>
+      <p className="mt-4">
+        환불 문의는 주문번호와 환불 사유도 함께 보내주세요. 결제 내역과 크레딧 사용 여부를 확인한 뒤 처리 결과를 안내합니다.
       </p>
     </PolicyPage>
   );
