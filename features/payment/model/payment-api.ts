@@ -17,8 +17,14 @@ export type PaymentCheckout = {
   credit_amount: number;
   currency: string;
   status: string;
-  pay_token: string;
-  checkout_page: string;
+  order_name: string;
+};
+
+export type PaymentCompletion = {
+  payment_id: string;
+  status: string;
+  already_processed: boolean;
+  test_payment: boolean;
 };
 
 export async function fetchPaymentProducts(authFetch: typeof fetch): Promise<PaymentProduct[]> {
@@ -63,11 +69,33 @@ export async function createPaymentCheckout(
     typeof data.credit_amount !== "number" ||
     typeof data.currency !== "string" ||
     typeof data.status !== "string" ||
-    typeof data.pay_token !== "string" ||
-    typeof data.checkout_page !== "string"
+    typeof data.order_name !== "string"
   ) {
     throw new Error("결제창 응답이 올바르지 않습니다");
   }
 
+  return data;
+}
+
+export async function completePortOnePayment(
+  authFetch: typeof fetch,
+  paymentId: string,
+): Promise<PaymentCompletion> {
+  const res = await authFetch(`${API_BASE}/payments/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ payment_id: paymentId }),
+  });
+  if (!res.ok) throw new Error("결제 완료 정보를 확인하지 못했습니다");
+
+  const data = await res.json();
+  if (
+    typeof data.payment_id !== "string" ||
+    typeof data.status !== "string" ||
+    typeof data.already_processed !== "boolean" ||
+    typeof data.test_payment !== "boolean"
+  ) {
+    throw new Error("결제 완료 응답이 올바르지 않습니다");
+  }
   return data;
 }

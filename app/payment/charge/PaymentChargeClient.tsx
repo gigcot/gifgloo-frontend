@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import * as PortOne from "@portone/browser-sdk/v2";
 import { Header } from "@/shared/ui/Header";
 import { HeaderActions } from "@/features/auth/ui/HeaderActions";
 import { useCredits } from "@/features/credits/model/use-credits";
 import { useAuth } from "@/shared/lib/use-auth";
 import {
+  completePortOnePayment,
   createPaymentCheckout,
   fetchPaymentProducts,
   type PaymentProduct,
@@ -16,6 +18,9 @@ type State =
   | { status: "loading" }
   | { status: "ready"; products: PaymentProduct[] }
   | { status: "error"; message: string };
+
+const PORTONE_STORE_ID = process.env.NEXT_PUBLIC_PORTONE_STORE_ID;
+const PORTONE_CHANNEL_KEY = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY;
 
 function formatPrice(amount: number, currency: string) {
   return new Intl.NumberFormat("ko-KR", {
@@ -77,11 +82,22 @@ function CreditCountPreview({
 }
 
 export function PaymentChargeClient() {
-  const { authFetch } = useAuth();
+  const { authFetch, email } = useAuth();
   const credits = useCredits();
   const [state, setState] = useState<State>({ status: "loading" });
   const [checkoutProductId, setCheckoutProductId] = useState<string | null>(null);
   const [previewProductId, setPreviewProductId] = useState<string | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [checkoutError, setCheckoutError] = useState("");
+  const normalizedPhone = customerPhone.replace(/[^0-9]/g, "");
+  const canRequestPayment = Boolean(
+    customerName.trim()
+      && normalizedPhone.length >= 10
+      && normalizedPhone.length <= 11
+      && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim()),
+  );
 
   useEffect(() => {
     fetchPaymentProducts(authFetch)
@@ -94,18 +110,61 @@ export function PaymentChargeClient() {
       });
   }, [authFetch]);
 
+  useEffect(() => {
+    if (email) {
+      setCustomerEmail((current) => current || email);
+    }
+  }, [email]);
+
   async function handleCheckout(productId: string) {
     if (checkoutProductId) return;
+    if (!PORTONE_STORE_ID || !PORTONE_CHANNEL_KEY) {
+      setCheckoutError("포트원 결제 채널이 설정되지 않았습니다");
+      return;
+    }
+    if (!canRequestPayment) {
+      setCheckoutError("결제자 이름, 연락처와 이메일을 모두 입력해주세요");
+      return;
+    }
 
     setCheckoutProductId(productId);
+    setCheckoutError("");
     try {
       const checkout = await createPaymentCheckout(authFetch, productId);
-      window.location.assign(checkout.checkout_page);
-    } catch (error) {
-      setState({
-        status: "error",
-        message: error instanceof Error ? error.message : "결제창을 만들지 못했습니다",
+      const paymentResponse = await PortOne.requestPayment({
+        storeId: PORTONE_STORE_ID,
+        channelKey: PORTONE_CHANNEL_KEY,
+        paymentId: checkout.order_id,
+        orderName: checkout.order_name,
+        totalAmount: checkout.amount,
+        currency: "KRW",
+        payMethod: "CARD",
+        customer: {
+          fullName: customerName.trim(),
+          phoneNumber: normalizedPhone,
+          email: customerEmail.trim(),
+        },
+        redirectUrl: `${window.location.origin}/payment/portone-return`,
       });
+      if (paymentResponse === undefined) {
+        setCheckoutProductId(null);
+        return;
+      }
+      if (paymentResponse.code !== undefined) {
+        throw new Error(paymentResponse.message ?? "결제가 취소되었습니다");
+      }
+
+      const completion = await completePortOnePayment(
+        authFetch,
+        paymentResponse.paymentId,
+      );
+      window.location.assign(
+        completion.test_payment ? "/payment/success?test=true" : "/payment/success",
+      );
+    } catch (error) {
+      setCheckoutError(
+        error instanceof Error ? error.message : "결제창을 만들지 못했습니다",
+      );
       setCheckoutProductId(null);
     }
   }
@@ -135,6 +194,60 @@ export function PaymentChargeClient() {
         </section>
 
         <section className="mt-8">
+          <div className="mb-6 rounded-2xl border border-white/10 bg-[#111113] p-5">
+            <p className="font-semibold text-white">결제자 정보</p>
+            <p className="mt-1 text-xs leading-5 text-white/40">
+              KG이니시스 카드 결제창 호출에 필요한 정보입니다.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-semibold text-white/55">이름</span>
+                <input
+                  type="text"
+                  autoComplete="name"
+                  value={customerName}
+                  onChange={(event) => setCustomerName(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none focus:border-purple-400/60"
+                  placeholder="홍길동"
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-white/55">휴대전화</span>
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  value={customerPhone}
+                  onChange={(event) => setCustomerPhone(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none focus:border-purple-400/60"
+                  placeholder="010-1234-5678"
+                  required
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="text-xs font-semibold text-white/55">이메일</span>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={customerEmail}
+                  onChange={(event) => setCustomerEmail(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none focus:border-purple-400/60"
+                  placeholder="buyer@example.com"
+                  required
+                />
+              </label>
+            </div>
+          </div>
+
+          {checkoutError && (
+            <p
+              role="alert"
+              className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+            >
+              {checkoutError}
+            </p>
+          )}
+
           {state.status === "loading" && (
             <div className="rounded-2xl border border-white/10 bg-[#111113] p-6">
               <div className="h-5 w-32 animate-pulse rounded-full bg-white/10" />
@@ -171,7 +284,7 @@ export function PaymentChargeClient() {
                       disabled={checkoutProductId !== null}
                       className="rounded-full bg-purple-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500 disabled:cursor-wait disabled:opacity-50"
                     >
-                      {checkoutProductId === product.id ? "결제창 여는 중" : "토스페이로 결제"}
+                      {checkoutProductId === product.id ? "결제창 여는 중" : "신용카드로 결제"}
                     </button>
                   </div>
                   {credits.status === "loading" && (

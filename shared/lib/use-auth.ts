@@ -6,15 +6,31 @@ import { API_BASE } from "./api-base";
 type AuthState = {
   isLoggedIn: boolean;
   checked: boolean;
+  email: string | null;
 };
 
 export function useAuth() {
-  const [auth, setAuth] = useState<AuthState>({ isLoggedIn: false, checked: false });
+  const [auth, setAuth] = useState<AuthState>({
+    isLoggedIn: false,
+    checked: false,
+    email: null,
+  });
 
   useEffect(() => {
     fetch(`${API_BASE}/users/me`, { credentials: "include" })
-      .then((res) => setAuth({ isLoggedIn: res.ok, checked: true }))
-      .catch(() => setAuth({ isLoggedIn: false, checked: true }));
+      .then(async (res) => {
+        if (!res.ok) {
+          setAuth({ isLoggedIn: false, checked: true, email: null });
+          return;
+        }
+        const data = await res.json();
+        setAuth({
+          isLoggedIn: true,
+          checked: true,
+          email: typeof data.email === "string" ? data.email : null,
+        });
+      })
+      .catch(() => setAuth({ isLoggedIn: false, checked: true, email: null }));
   }, []);
 
   const authFetch = useCallback(
@@ -25,7 +41,7 @@ export function useAuth() {
       });
 
       if (res.status === 401 || res.status === 403) {
-        setAuth({ isLoggedIn: false, checked: true });
+        setAuth({ isLoggedIn: false, checked: true, email: null });
       }
 
       return res;
@@ -37,10 +53,19 @@ export function useAuth() {
     try {
       const res = await fetch(`${API_BASE}/users/me`, { credentials: "include" });
       const ok = res.ok;
-      setAuth({ isLoggedIn: ok, checked: true });
+      if (!ok) {
+        setAuth({ isLoggedIn: false, checked: true, email: null });
+        return false;
+      }
+      const data = await res.json();
+      setAuth({
+        isLoggedIn: true,
+        checked: true,
+        email: typeof data.email === "string" ? data.email : null,
+      });
       return ok;
     } catch {
-      setAuth({ isLoggedIn: false, checked: true });
+      setAuth({ isLoggedIn: false, checked: true, email: null });
       return false;
     }
   }, []);
@@ -48,6 +73,7 @@ export function useAuth() {
   return {
     isLoggedIn: auth.isLoggedIn,
     checked: auth.checked,
+    email: auth.email,
     authFetch,
     checkAuth,
   };

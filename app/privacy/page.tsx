@@ -19,7 +19,7 @@ export default function PrivacyPage() {
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>소셜 로그인 정보: 로그인 제공자, 제공자별 식별자, 이메일(제공되는 경우)</li>
           <li>서비스 이용 정보: GIF 검색어와 검색 식별자, 업로드 사진, 선택한 GIF 정보, 생성 결과물, 작업 기록, 크레딧 이용 기록</li>
-          <li>결제 정보: 주문번호, 결제 금액, 결제 상태, 결제 제공사 거래 식별자</li>
+          <li>결제 정보: 주문번호, 결제 금액, 결제 상태, 결제자 이름, 연락처, 이메일 및 결제 제공사 거래 식별자</li>
           <li>문의 정보: 문의 시 이용자가 제공한 이메일, 주문번호 및 문의 내용</li>
           <li>자동 생성 정보: 접속 일시, IP 주소, 브라우저·기기 정보, 쿠키 및 서비스 이용 기록</li>
         </ul>
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>Google 및 Kakao: 소셜 로그인 인증 및 회원 식별 정보 제공</li>
           <li>Klipy: GIF 검색, GIF 콘텐츠 및 검색 결과 제공</li>
-          <li>Toss Pay: 주문 확인, 결제 및 환불 처리</li>
+          <li>포트원 및 KG이니시스: 주문 확인, 결제 및 환불 처리</li>
           <li>Cloudflare R2(APAC 위치 힌트): 업로드 파일 및 생성 결과물 저장</li>
           <li>Amazon Web Services 서울 리전: GIF 처리 작업 실행</li>
           <li>OpenAI: AI 이미지 분석 및 GIF 이미지 합성</li>
