@@ -5,7 +5,7 @@ const policyLinks = [
   { href: "/terms", label: "이용약관" },
   { href: "/privacy", label: "개인정보처리방침" },
   { href: "/refund", label: "결제 및 환불정책" },
-  { href: "/credits-policy", label: "크레딧 정책" },
+  { href: "/credits-policy", label: "이용권 정책" },
   { href: "/contact", label: "문의" },
 ];
 

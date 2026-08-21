@@ -29,7 +29,7 @@ export function HeaderActions({ onLogin }: Props) {
           }}
           className="hidden rounded-full border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-sm font-bold text-purple-100 transition-colors hover:bg-purple-500/20 sm:block"
         >
-          충전
+          구매
         </Link>
         <UserMenu />
       </div>

@@ -18,7 +18,7 @@ import { fetchCreditBalance } from "@/features/credits/model/use-credits";
 
 type Stage = "ready" | "processing" | "done" | "error";
 
-type CreditSnapshot = {
+type UsageSnapshot = {
   before: number;
   after: number | null;
 };
@@ -42,11 +42,11 @@ export function ComposePanel() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const [showCreditConfirm, setShowCreditConfirm] = useState(false);
-  const [showInsufficientCredit, setShowInsufficientCredit] = useState(false);
+  const [showUsageConfirm, setShowUsageConfirm] = useState(false);
+  const [showInsufficientPass, setShowInsufficientPass] = useState(false);
   const [showGifSheet, setShowGifSheet] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [creditSnapshot, setCreditSnapshot] = useState<CreditSnapshot | null>(null);
+  const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -103,26 +103,28 @@ export function ComposePanel() {
 
   const visibleStage = job.isComplete ? "done" : job.isFailed ? "error" : stage;
   const visibleError = job.isFailed ? job.failedReason : error;
-  const displayedBalanceBefore = job.creditSettlement?.balanceBefore ?? creditSnapshot?.before ?? null;
-  const displayedCharged = job.creditSettlement?.charged ?? 10;
-  const displayedRefunded = job.creditSettlement?.refunded ?? (job.creditRestored ? 10 : 0);
-  const displayedBalanceAfter = job.creditSettlement?.balanceAfter ?? creditSnapshot?.after ?? null;
+  const displayedUsesBefore = job.creditSettlement
+    ? Math.floor(job.creditSettlement.balanceBefore / 10)
+    : usageSnapshot?.before ?? null;
+  const displayedUsesAfter = job.creditSettlement
+    ? Math.floor(job.creditSettlement.balanceAfter / 10)
+    : usageSnapshot?.after ?? null;
 
   useEffect(() => {
-    if ((visibleStage !== "done" && visibleStage !== "error") || !creditSnapshot || creditSnapshot.after !== null) return;
+    if ((visibleStage !== "done" && visibleStage !== "error") || !usageSnapshot || usageSnapshot.after !== null) return;
 
     let cancelled = false;
     fetchCreditBalance(authFetch)
       .then((balance) => {
         if (cancelled) return;
-        setCreditSnapshot((current) => current ? { ...current, after: balance } : current);
+        setUsageSnapshot((current) => current ? { ...current, after: balance.remainingUses } : current);
       })
       .catch(() => undefined);
 
     return () => {
       cancelled = true;
     };
-  }, [authFetch, creditSnapshot, visibleStage]);
+  }, [authFetch, usageSnapshot, visibleStage]);
 
   function clearPhoto() {
     if (objectUrlRef.current) {
@@ -158,9 +160,9 @@ export function ComposePanel() {
 
     try {
       const balance = await fetchCreditBalance(authFetch);
-      setCreditSnapshot({ before: balance, after: null });
+      setUsageSnapshot({ before: balance.remainingUses, after: null });
     } catch {
-      setCreditSnapshot(null);
+      setUsageSnapshot(null);
     }
 
     const result = await submitComposition(authFetch, gif, photoFile, confirmed);
@@ -178,7 +180,7 @@ export function ComposePanel() {
     } else if (result.type === "insufficient_credit") {
       composingRef.current = false;
       setStage("ready");
-      setShowInsufficientCredit(true);
+      setShowInsufficientPass(true);
     } else {
       composingRef.current = false;
       setError(result.message);
@@ -193,12 +195,12 @@ export function ComposePanel() {
     setError(null);
     setConfirmation(null);
     setFileError(null);
-    setCreditSnapshot(null);
+    setUsageSnapshot(null);
     setJobId(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function goChargeFromCompose() {
+  function goPurchaseFromCompose() {
     if (gif) {
       localStorage.setItem("compose_gif", JSON.stringify(gif));
     }
@@ -291,7 +293,7 @@ export function ComposePanel() {
           )}
 
           <button
-            onClick={() => setShowCreditConfirm(true)}
+            onClick={() => setShowUsageConfirm(true)}
             disabled={!myPhoto || !gif}
             className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white shadow-lg shadow-purple-950/40 transition-all hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-30"
           >
@@ -300,32 +302,32 @@ export function ComposePanel() {
         </div>
       )}
 
-      {/* ── 합성 시작 크레딧 안내 모달 ── */}
-      {showCreditConfirm && (
+      {/* ── 합성 이용권 사용 안내 모달 ── */}
+      {showUsageConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setShowCreditConfirm(false)}
+          onClick={() => setShowUsageConfirm(false)}
         >
           <div
             className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-[#111113] p-8 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-center text-base font-bold text-white">합성을 시작할까요?</p>
+            <p className="text-center text-base font-bold text-white">이용권 1회를 사용할까요?</p>
             <p className="text-center text-sm leading-6 text-white/50">
-              현재 GIF 이미지 합성은 10크레딧이 사용되며<br />크레딧 차감 후 AI 합성 작업이 시작됩니다.<br />통상 2~3분 내 결과물이 제공됩니다.
+              GIF 합성 이용권 1회가 사용된 뒤<br />AI 합성 작업이 바로 시작됩니다.<br />통상 2~3분 내 결과물이 제공됩니다.
             </p>
             <p className="rounded-xl bg-white/[0.04] px-4 py-3 text-center text-xs leading-5 text-white/45">
-              작업 시작 후에는 중도 취소 기능을 제공하지 않으며, 단순 변심에 의한 사용 크레딧 복구 및 환불이 제한됩니다.
+              작업 시작 후에는 중도 취소 기능을 제공하지 않으며, 단순 변심에 의한 이용 횟수 복구 및 환불이 제한됩니다.
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => setShowCreditConfirm(false)}
+                onClick={() => setShowUsageConfirm(false)}
                 className="flex-1 rounded-full border border-white/20 py-3 text-sm font-medium text-white/60 transition-colors hover:border-white/40 hover:text-white"
               >
                 취소
               </button>
               <button
-                onClick={() => { setShowCreditConfirm(false); handleCompose(); }}
+                onClick={() => { setShowUsageConfirm(false); handleCompose(); }}
                 className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
               >
                 시작하기
@@ -335,32 +337,31 @@ export function ComposePanel() {
         </div>
       )}
 
-      {/* ── 크레딧 부족 안내 모달 ── */}
-      {showInsufficientCredit && (
+      {showInsufficientPass && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-          onClick={() => setShowInsufficientCredit(false)}
+          onClick={() => setShowInsufficientPass(false)}
         >
           <div
             className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-[#111113] p-8 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
-            <p className="text-center text-base font-bold text-white">크레딧이 부족해요</p>
+            <p className="text-center text-base font-bold text-white">사용 가능한 이용권이 없어요</p>
             <p className="text-center text-sm leading-6 text-white/50">
-              합성을 시작하려면 크레딧이 필요합니다.<br />크레딧을 충전하시겠어요?
+              합성을 시작하려면 GIF 합성 이용권이 필요합니다.<br />5회 이용권을 구매하시겠어요?
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => setShowInsufficientCredit(false)}
+                onClick={() => setShowInsufficientPass(false)}
                 className="flex-1 rounded-full border border-white/20 py-3 text-sm font-medium text-white/60 transition-colors hover:border-white/40 hover:text-white"
               >
                 나중에
               </button>
               <button
-                onClick={goChargeFromCompose}
+                onClick={goPurchaseFromCompose}
                 className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
               >
-                충전하기
+                이용권 구매
               </button>
             </div>
           </div>
@@ -437,20 +438,20 @@ export function ComposePanel() {
             <img src={job.resultUrl} alt="합성 결과" className="w-full object-contain" />
           </div>
 
-          {displayedBalanceBefore !== null && (
+          {displayedUsesBefore !== null && (
             <div className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-[#111113] p-4 text-center">
               <div>
-                <p className="text-xs text-white/40">기존 크레딧</p>
-                <p className="mt-1 font-bold text-white">{displayedBalanceBefore.toLocaleString()}</p>
+                <p className="text-xs text-white/40">사용 전</p>
+                <p className="mt-1 font-bold text-white">{displayedUsesBefore.toLocaleString()}회</p>
               </div>
               <div className="border-x border-white/10">
-                <p className="text-xs text-white/40">사용 크레딧</p>
-                <p className="mt-1 font-bold text-purple-300">-{displayedCharged.toLocaleString()}</p>
+                <p className="text-xs text-white/40">이번 합성</p>
+                <p className="mt-1 font-bold text-purple-300">-1회</p>
               </div>
               <div>
-                <p className="text-xs text-white/40">작업 후 크레딧</p>
+                <p className="text-xs text-white/40">남은 이용권</p>
                 <p className="mt-1 font-bold text-white">
-                  {displayedBalanceAfter === null ? "확인 중" : displayedBalanceAfter.toLocaleString()}
+                  {displayedUsesAfter === null ? "확인 중" : `${displayedUsesAfter.toLocaleString()}회`}
                 </p>
               </div>
             </div>
@@ -489,27 +490,10 @@ export function ComposePanel() {
           </div>
           {job.creditRestored && (
             <div className="w-full rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-              <p className="font-semibold text-emerald-200">
-                차감된 {displayedRefunded.toLocaleString()}크레딧은 복구되었습니다.
+              <p className="font-semibold text-emerald-200">사용한 이용권 1회가 복구되었습니다.</p>
+              <p className="mt-2 text-xs leading-5 text-white/45">
+                원 이용권이 이미 만료된 경우 복구된 1회는 복구 시점부터 24시간 동안 사용할 수 있습니다.
               </p>
-              {displayedBalanceBefore !== null && (
-                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-emerald-400/15 pt-3 text-xs">
-                  <div>
-                    <p className="text-white/40">작업 전</p>
-                    <p className="mt-1 font-bold text-white">{displayedBalanceBefore.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/40">복구</p>
-                    <p className="mt-1 font-bold text-emerald-300">+{displayedRefunded.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/40">작업 후 크레딧</p>
-                    <p className="mt-1 font-bold text-white">
-                      {displayedBalanceAfter === null ? "확인 중" : displayedBalanceAfter.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           )}
           <button

@@ -11,9 +11,9 @@ export function NewUserWelcomeModal({ onClose }: Props) {
         <div className="mb-3 text-5xl">🎉</div>
         <h2 className="mb-1 text-xl font-bold text-white">환영해요!</h2>
         <p className="mb-4 text-sm text-white/60">
-          가입 기념으로 <span className="font-semibold text-purple-400">50 크레딧</span>을 드렸어요.
+          가입 기념으로 <span className="font-semibold text-purple-400">GIF 합성 5회 이용권</span>을 드렸어요.
           <br />
-          지금 바로 GIF 합성을 시작해보세요!
+          7일 안에 GIF 합성을 시작해보세요!
         </p>
         <button
           onClick={onClose}

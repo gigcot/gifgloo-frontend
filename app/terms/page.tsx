@@ -19,7 +19,7 @@ export default function TermsPage() {
         <h2 className="text-base font-bold text-white">제2조 용어의 정의</h2>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>“회원”이란 Google 또는 Kakao 계정으로 로그인하여 서비스를 이용하는 사람을 말합니다.</li>
-          <li>“크레딧”이란 서비스 안에서 AI 합성 작업을 시작할 때 사용하는 전자적 이용 단위를 말합니다.</li>
+          <li>“이용권”이란 정해진 사용기한과 횟수 안에서 GIF 합성 작업을 요청할 수 있는 상품을 말합니다.</li>
           <li>“결과물”이란 회원이 선택한 GIF와 업로드한 사진을 바탕으로 서비스가 생성한 GIF 파일을 말합니다.</li>
         </ul>
       </section>
@@ -37,21 +37,21 @@ export default function TermsPage() {
         <h2 className="text-base font-bold text-white">제4조 서비스 내용과 제공 조건</h2>
         <p className="mt-3">
           회사는 회원이 선택한 GIF와 업로드한 사진을 AI로 처리하여 GIF 결과물을 제공합니다.
-          판매가격, 제공 범위, 작업 방식, 예상 작업 시간, 결과물 제공 방식, 수정 가능 횟수 및 필요 크레딧은
+          판매가격, 이용 횟수와 사용기한, 제공 범위, 작업 방식, 예상 작업 시간, 결과물 제공 방식 및 수정 가능 횟수는
           <Link href="/service-guide" className="mx-1 text-purple-300 underline underline-offset-2">서비스 안내</Link>
           와 작업 시작 전 화면에서 확인할 수 있습니다.
         </p>
       </section>
 
       <section className="mt-8 border-t border-white/10 pt-8">
-        <h2 className="text-base font-bold text-white">제5조 크레딧, 결제 및 환불</h2>
+        <h2 className="text-base font-bold text-white">제5조 이용권, 결제 및 환불</h2>
         <p className="mt-3">
-          크레딧은 서비스별 AI 합성 작업에 사용되며 현금처럼 다른 회원에게 양도할 수 없습니다.
-          결제 금액과 지급 크레딧은 결제 전에 표시하고, 작업별 차감 크레딧은 작업 시작 전에 표시합니다.
+          이용권은 GIF 합성 작업에 사용되며 현금처럼 다른 회원에게 양도할 수 없습니다.
+          결제 금액, 제공 횟수와 사용기한은 결제 전에 표시하고, 작업별 사용 횟수는 작업 시작 전에 표시합니다.
           구매·차감·취소·환불에 관한 세부 사항은
           <Link href="/refund" className="mx-1 text-purple-300 underline underline-offset-2">결제 및 환불정책</Link>
           과
-          <Link href="/credits-policy" className="mx-1 text-purple-300 underline underline-offset-2">크레딧 정책</Link>
+          <Link href="/credits-policy" className="mx-1 text-purple-300 underline underline-offset-2">이용권 정책</Link>
           을 따릅니다.
         </p>
       </section>
@@ -70,7 +70,7 @@ export default function TermsPage() {
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>타인의 초상권, 저작권, 개인정보 또는 기타 권리를 침해하는 콘텐츠를 업로드·생성·배포하는 행위</li>
           <li>불법적이거나 음란·폭력적 콘텐츠, 아동·청소년을 성적으로 묘사하는 콘텐츠를 처리하는 행위</li>
-          <li>서비스의 정상 운영을 방해하거나 취약점을 악용하고, 크레딧 또는 결제 절차를 부정하게 이용하는 행위</li>
+          <li>서비스의 정상 운영을 방해하거나 취약점을 악용하고, 이용권 또는 결제 절차를 부정하게 이용하는 행위</li>
           <li>다른 사람을 사칭하거나 결과물을 기만·사기 등 위법한 목적으로 사용하는 행위</li>
         </ul>
         <p className="mt-3">회사는 위반 행위가 확인되면 관련 법령이 허용하는 범위에서 작업을 제한하거나 계정 이용을 정지할 수 있습니다.</p>
@@ -90,7 +90,7 @@ export default function TermsPage() {
         <p className="mt-3">
           회사는 품질 개선을 위해 AI 모델 또는 처리 방식을 변경할 수 있습니다.
           점검, 장애, 외부 서비스 중단 또는 불가피한 운영상 사유가 있는 경우 서비스의 전부 또는 일부가 일시 중단될 수 있습니다.
-          이용 가격, 필요 크레딧 또는 주요 제공 조건이 변경되는 경우 적용 전에 서비스 화면을 통해 안내합니다.
+          이용 가격, 이용권 조건 또는 주요 제공 조건이 변경되는 경우 적용 전에 서비스 화면을 통해 안내합니다.
         </p>
       </section>
 
@@ -123,7 +123,7 @@ export default function TermsPage() {
         </p>
       </section>
 
-      <p className="mt-8 text-xs text-white/35">시행일: 2026년 8월 9일</p>
+      <p className="mt-8 text-xs text-white/35">시행일: 2026년 8월 21일</p>
     </PolicyPage>
   );
 }
