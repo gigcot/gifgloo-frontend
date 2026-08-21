@@ -19,7 +19,7 @@ type AuthFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 
 const STATUS_MESSAGES: Record<number, string> = {
   400: "요청이 올바르지 않아요. 다시 시도해주세요.",
-  402: "크레딧이 부족해요. 충전 후 다시 시도해주세요.",
+  402: "사용 가능한 합성 이용권이 없어요.",
   413: "파일 크기가 너무 커요. 더 작은 이미지를 사용해주세요.",
   429: "요청이 너무 많아요. 잠시 후 다시 시도해주세요.",
   500: "서버 오류가 발생했어요. 잠시 후 다시 시도해주세요.",

@@ -7,6 +7,9 @@ export type PaymentProduct = {
   name: string;
   amount: number;
   credit_amount: number;
+  purpose: "COMPOSITION_PASS_PURCHASE";
+  usage_count: number;
+  validity_days: number;
   currency: string;
 };
 
@@ -15,6 +18,7 @@ export type PaymentCheckout = {
   order_id: string;
   amount: number;
   credit_amount: number;
+  purpose: "COMPOSITION_PASS_PURCHASE";
   currency: string;
   status: string;
   order_name: string;
@@ -42,6 +46,9 @@ export async function fetchPaymentProducts(authFetch: typeof fetch): Promise<Pay
       typeof item.name !== "string" ||
       typeof item.amount !== "number" ||
       typeof item.credit_amount !== "number" ||
+      item.purpose !== "COMPOSITION_PASS_PURCHASE" ||
+      typeof item.usage_count !== "number" ||
+      typeof item.validity_days !== "number" ||
       typeof item.currency !== "string"
     ) {
       throw new Error("결제 상품 응답이 올바르지 않습니다");
@@ -67,6 +74,7 @@ export async function createPaymentCheckout(
     typeof data.order_id !== "string" ||
     typeof data.amount !== "number" ||
     typeof data.credit_amount !== "number" ||
+    data.purpose !== "COMPOSITION_PASS_PURCHASE" ||
     typeof data.currency !== "string" ||
     typeof data.status !== "string" ||
     typeof data.order_name !== "string"

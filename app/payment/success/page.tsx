@@ -37,8 +37,8 @@ export default function PaymentSuccessPage() {
         </h1>
         <p className="mt-4 text-sm leading-6 text-white/50">
           {isTestPayment
-            ? "테스트 채널 결제이므로 실제 크레딧은 지급되지 않습니다."
-            : "곧 계정에 크레딧이 지급될 거예요. 반영까지 잠시 걸릴 수 있어요."}
+            ? "테스트 채널 결제이므로 실제 이용권은 지급되지 않습니다."
+            : "GIF 합성 5회 이용권이 지급됐어요. 결제일부터 7일 동안 사용할 수 있습니다."}
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button

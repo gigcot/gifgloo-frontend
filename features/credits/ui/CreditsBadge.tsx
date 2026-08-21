@@ -11,9 +11,24 @@ export function CreditsBadge() {
 
   if (state.status === "error") return null;
 
+  const expiration = state.nearestExpiresAt
+    ? new Intl.DateTimeFormat("ko-KR", {
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Seoul",
+      }).format(new Date(state.nearestExpiresAt))
+    : null;
+
   return (
-    <span className="text-base font-bold text-white">
-      {state.balance.toLocaleString()} 크레딧
-    </span>
+    <div className="text-right">
+      <p className="text-sm font-bold text-white sm:text-base">
+        합성 {state.remainingUses.toLocaleString()}회
+      </p>
+      {expiration && (
+        <p className="hidden text-[11px] text-white/40 sm:block">가장 빠른 만료 {expiration}</p>
+      )}
+    </div>
   );
 }

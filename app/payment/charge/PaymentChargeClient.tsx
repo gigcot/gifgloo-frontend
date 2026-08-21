@@ -30,7 +30,7 @@ function formatPrice(amount: number, currency: string) {
   }).format(amount);
 }
 
-function CreditCountPreview({
+function UsageCountPreview({
   current,
   next,
   active,
@@ -65,17 +65,17 @@ function CreditCountPreview({
 
   return (
     <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
-      <p className="text-xs font-semibold text-white/35">충전 후 예상 크레딧</p>
+      <p className="text-xs font-semibold text-white/35">구매 후 예상 잔여 횟수</p>
       <div className="mt-2 flex items-end gap-3">
         <span className="text-2xl font-black tabular-nums text-white">
           {visibleCount.toLocaleString()}
         </span>
         <span className="pb-1 text-sm font-semibold text-purple-200">
-          / {next.toLocaleString()} 크레딧
+          / {next.toLocaleString()}회
         </span>
       </div>
       <p className="mt-1 text-xs text-white/35">
-        현재 {current.toLocaleString()}개에서 {next.toLocaleString()}개로 충전됩니다.
+        현재 {current.toLocaleString()}회에서 {next.toLocaleString()}회로 늘어납니다.
       </p>
     </div>
   );
@@ -101,7 +101,10 @@ export function PaymentChargeClient() {
 
   useEffect(() => {
     fetchPaymentProducts(authFetch)
-      .then((products) => setState({ status: "ready", products }))
+      .then((products) => setState({
+        status: "ready",
+        products: products.filter((product) => product.purpose === "COMPOSITION_PASS_PURCHASE"),
+      }))
       .catch((error) => {
         setState({
           status: "error",
@@ -171,19 +174,19 @@ export function PaymentChargeClient() {
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white">
-      <Header title="크레딧 충전" showBack action={<HeaderActions />} />
+      <Header title="이용권 구매" showBack action={<HeaderActions />} />
       <main className="mx-auto max-w-3xl px-4 py-12">
-        <p className="text-sm font-semibold text-purple-300">credits</p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">크레딧 충전</h1>
+        <p className="text-sm font-semibold text-purple-300">composition pass</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">GIF 합성 이용권</h1>
         <p className="mt-3 text-sm leading-6 text-white/50">
-          크레딧은 GIF 합성 작업에 사용됩니다. 결제가 완료되면 계정에 크레딧이 지급됩니다.
+          5회 이용권은 결제 완료 시 지급되며, 각 구매 건의 사용기한은 결제일부터 7일입니다.
         </p>
 
         <section className="mt-6 rounded-2xl border border-purple-400/20 bg-purple-500/[0.06] p-5 text-sm leading-6 text-white/60">
           <p className="font-semibold text-white">현재 제공 중인 서비스</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>업로드한 사진 1장과 선택한 GIF를 AI로 합성해 새로운 GIF 결과물을 제작합니다.</li>
-            <li>OpenAI GPT Image 1.5 기반 기술을 사용하며, 작업 1회에 10크레딧이 사용됩니다.</li>
+            <li>OpenAI GPT Image 1.5 기반 기술을 사용하며, 합성 요청 1건마다 이용권 1회가 사용됩니다.</li>
             <li>GIF는 최대 20프레임으로 처리되며, 작업은 통상 2~3분 소요됩니다.</li>
             <li>완료된 결과물은 내 에셋에서 확인, 다운로드 및 공유할 수 있습니다.</li>
             <li>결과물 수정 기능은 현재 제공하지 않습니다.</li>
@@ -264,6 +267,18 @@ export function PaymentChargeClient() {
 
           {state.status === "ready" && (
             <div className="grid gap-3">
+              {state.products.length === 0 && (
+                <div className="rounded-2xl border border-white/10 bg-[#111113] p-6 text-center">
+                  <p className="font-semibold text-white">이용권 상품을 준비하고 있습니다</p>
+                  <p className="mt-2 text-sm text-white/45">잠시 후 다시 확인해주세요.</p>
+                  <Link
+                    href="/compose"
+                    className="mt-5 inline-block rounded-full bg-purple-600 px-6 py-3 text-sm font-bold text-white hover:bg-purple-500"
+                  >
+                    합성하러 가기
+                  </Link>
+                </div>
+              )}
               {state.products.map((product) => (
                 <article
                   key={product.id}
@@ -276,7 +291,7 @@ export function PaymentChargeClient() {
                     <div>
                       <p className="text-lg font-bold text-white">{product.name}</p>
                       <p className="mt-1 text-sm text-white/45">
-                        {product.credit_amount.toLocaleString()} 크레딧 · {formatPrice(product.amount, product.currency)}
+                        합성 {product.usage_count.toLocaleString()}회 · 사용기한 {product.validity_days}일 · {formatPrice(product.amount, product.currency)}
                       </p>
                     </div>
                     <button
@@ -291,9 +306,9 @@ export function PaymentChargeClient() {
                     <div className="mt-4 h-24 animate-pulse rounded-xl bg-white/10" />
                   )}
                   {credits.status === "done" && (
-                    <CreditCountPreview
-                      current={credits.balance}
-                      next={credits.balance + product.credit_amount}
+                    <UsageCountPreview
+                      current={credits.remainingUses}
+                      next={credits.remainingUses + product.usage_count}
                       active={previewProductId === product.id || checkoutProductId === product.id}
                     />
                   )}
@@ -304,9 +319,9 @@ export function PaymentChargeClient() {
         </section>
 
         <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm leading-6 text-white/45">
-          <p>결제 완료 후 크레딧 반영까지 잠시 걸릴 수 있습니다.</p>
+          <p>각 이용권은 구매 건별로 만료일이 관리되며, 먼저 만료되는 이용권부터 사용됩니다.</p>
           <p className="mt-3">
-            결제 전 <Link href="/terms" className="underline hover:text-white">이용약관</Link>, <Link href="/privacy" className="underline hover:text-white">개인정보처리방침</Link>, <Link href="/refund" className="underline hover:text-white">결제 및 환불정책</Link>, <Link href="/credits-policy" className="underline hover:text-white">크레딧 정책</Link>을 확인해주세요.
+            결제 전 <Link href="/terms" className="underline hover:text-white">이용약관</Link>, <Link href="/privacy" className="underline hover:text-white">개인정보처리방침</Link>, <Link href="/refund" className="underline hover:text-white">결제 및 환불정책</Link>, <Link href="/credits-policy" className="underline hover:text-white">이용권 정책</Link>을 확인해주세요.
           </p>
         </div>
       </main>

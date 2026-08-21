@@ -10,14 +10,14 @@ export default function PaymentCancelPage() {
         <p className="text-sm font-semibold text-purple-300">payment canceled</p>
         <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">결제가 취소됐어요</h1>
         <p className="mt-4 text-sm leading-6 text-white/50">
-          결제는 진행되지 않았습니다. 필요하면 다시 크레딧 충전을 시도할 수 있어요.
+          결제는 진행되지 않았습니다. 필요하면 다시 이용권 구매를 시도할 수 있어요.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
             href="/payment/charge"
             className="rounded-full bg-purple-600 px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
           >
-            다시 충전하기
+            다시 구매하기
           </Link>
           <Link
             href="/"

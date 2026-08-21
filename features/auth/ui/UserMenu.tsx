@@ -10,7 +10,7 @@ const MENU_ITEMS = [
   { label: "홈", href: "/" },
   { label: "내 에셋", href: "/my-assets" },
   { label: "결제 내역", href: "/coming-soon" },
-  { label: "크레딧 충전", href: "/payment/charge" },
+  { label: "이용권 구매", href: "/payment/charge" },
   { label: "합성하기", href: "/compose" },
 ] as const;
 
