@@ -99,6 +99,7 @@ function makeIdempotencyKey() {
 }
 
 export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
+  const [access, setAccess] = useState<"checking" | "allowed" | "denied">("checking");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -115,6 +116,12 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
   const [granting, setGranting] = useState(false);
 
   const endpoint = useMemo(() => `${API_BASE}${adminPath}`, [adminPath]);
+
+  useEffect(() => {
+    fetch(`${endpoint}/me`, { credentials: "include" })
+      .then((res) => setAccess(res.ok ? "allowed" : "denied"))
+      .catch(() => setAccess("denied"));
+  }, [endpoint]);
 
   const loadOverview = useCallback(async () => {
     setOverviewError(null);
@@ -238,8 +245,26 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
   }
 
   useEffect(() => {
+    if (access !== "allowed") return;
     loadOverview();
-  }, [loadOverview]);
+  }, [access, loadOverview]);
+
+  if (access === "checking") {
+    return (
+      <main className="mx-auto flex min-h-[60vh] max-w-screen-xl items-center justify-center px-4 py-8">
+        <p className="text-sm text-white/50">권한을 확인하고 있습니다...</p>
+      </main>
+    );
+  }
+
+  if (access === "denied") {
+    return (
+      <main className="mx-auto flex min-h-[60vh] max-w-screen-xl flex-col items-center justify-center px-4 py-8 text-center">
+        <h1 className="text-5xl font-black">404</h1>
+        <p className="mt-4 text-white/50">This page could not be found.</p>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex max-w-screen-xl flex-col gap-6 px-4 py-8">
