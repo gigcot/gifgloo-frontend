@@ -41,10 +41,9 @@ export function Footer() {
           </div>
           <div className="mt-5 space-y-1 text-xs leading-5 text-white/35">
             <p>상호명: 부릉이상점</p>
-            <p>영문 상호명(서비스명): gifgloo</p>
             <p>대표자: 이재호</p>
             <p>사업자등록번호: 275-57-00990</p>
-            <p>사업장 주소: 서울특별시 서초구 반포동 735-3, 지하1층 102호</p>
+            <p>사업장 주소: 서울특별시 서초구 반포동 735-3</p>
           </div>
         </div>
       </div>
