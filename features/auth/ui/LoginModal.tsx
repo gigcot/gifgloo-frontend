@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 import type { Gif } from "@/entities/gif/model";
-import { savePendingSignupConsent } from "@/features/auth/model/signup-consent";
+import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from "@/features/auth/model/signup-consent";
 import { API_BASE } from "@/shared/lib/api-base";
 
 type LoginModalProps = {
@@ -15,23 +15,38 @@ type LoginModalProps = {
 export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
   const [isFourteenOrOlder, setIsFourteenOrOlder] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const canContinue = isFourteenOrOlder && agreedToTerms;
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const canContinue = isFourteenOrOlder && agreedToTerms && agreedToPrivacy;
 
-  function savePendingAndRedirect(path: string) {
-    if (!canContinue) return;
-    savePendingSignupConsent();
-    if (pendingGif) {
-      localStorage.setItem("pending_gif", JSON.stringify(pendingGif));
+  async function startSocialLogin(provider: "kakao" | "google") {
+    if (!canContinue || loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/oauth/${provider}/start`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          terms_version: CURRENT_TERMS_VERSION,
+          privacy_version: CURRENT_PRIVACY_VERSION,
+          is_fourteen_or_older: isFourteenOrOlder,
+          agreed_to_terms: agreedToTerms,
+          agreed_to_privacy: agreedToPrivacy,
+        }),
+      });
+      if (!response.ok) throw new Error("로그인을 시작하지 못했습니다. 다시 시도해주세요.");
+      const { authorization_url }: { authorization_url: string } = await response.json();
+      if (pendingGif) {
+        localStorage.setItem("pending_gif", JSON.stringify(pendingGif));
+      }
+      window.location.href = authorization_url;
+    } catch {
+      setError("로그인을 시작하지 못했습니다. 다시 시도해주세요.");
+      setLoading(false);
     }
-    window.location.href = `${API_BASE}${path}`;
-  }
-
-  function handleKakao() {
-    savePendingAndRedirect("/oauth/kakao");
-  }
-
-  function handleGoogle() {
-    savePendingAndRedirect("/oauth/google");
   }
 
   return (
@@ -83,23 +98,26 @@ export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
               에 동의합니다.
             </span>
           </label>
-          <p className="border-t border-white/10 pt-3 text-xs leading-5 text-white/45">
-            로그인 과정에서 처리되는 정보는{" "}
-            <Link
-              href="/privacy"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2 hover:text-white"
-            >
-              개인정보처리방침
-            </Link>
-            에서 확인할 수 있습니다.
-          </p>
+          <label className="flex cursor-pointer items-start gap-3 text-sm text-white/75">
+            <input
+              type="checkbox"
+              checked={agreedToPrivacy}
+              onChange={(event) => setAgreedToPrivacy(event.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-purple-500"
+            />
+            <span>
+              <strong className="font-semibold text-purple-300">[필수]</strong>{" "}
+              <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">
+                개인정보처리방침
+              </Link>
+              에 동의합니다.
+            </span>
+          </label>
         </div>
 
         <button
-          onClick={handleKakao}
-          disabled={!canContinue}
+          onClick={() => void startSocialLogin("kakao")}
+          disabled={!canContinue || loading}
           className="flex items-center justify-center gap-3 rounded-xl bg-[#FEE500] px-4 py-3 font-semibold text-[#191919] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -109,8 +127,8 @@ export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
         </button>
 
         <button
-          onClick={handleGoogle}
-          disabled={!canContinue}
+          onClick={() => void startSocialLogin("google")}
+          disabled={!canContinue || loading}
           className="flex items-center justify-center gap-3 rounded-xl bg-white px-4 py-3 font-semibold text-[#191919] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
         >
           <svg width="20" height="20" viewBox="0 0 24 24">
@@ -124,6 +142,7 @@ export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
         {!canContinue && (
           <p className="text-center text-xs text-white/35">필수 항목을 확인하면 소셜 로그인을 진행할 수 있어요.</p>
         )}
+        {error && <p role="alert" className="text-center text-xs text-red-300">{error}</p>}
       </div>
     </div>
   );
