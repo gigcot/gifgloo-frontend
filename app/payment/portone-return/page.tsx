@@ -6,6 +6,7 @@ import Link from "next/link";
 import { completePortOnePayment } from "@/features/payment/model/payment-api";
 import { Header } from "@/shared/ui/Header";
 import { useAuth } from "@/shared/lib/use-auth";
+import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
 
 export default function PortOneReturnPage() {
   const { authFetch } = useAuth();
@@ -19,16 +20,32 @@ export default function PortOneReturnPage() {
       const message = params.get("message");
 
       if (code) {
+        trackEvent("payment_canceled", {
+          source: "payment_redirect",
+          provider_code: code,
+        });
         setError(message ?? "결제가 취소되었거나 실패했습니다.");
         return;
       }
       if (!paymentId) {
+        trackEvent("payment_failed", {
+          source: "payment_redirect",
+          stage: "missing_payment_id",
+        });
         setError("결제번호를 확인할 수 없습니다.");
         return;
       }
 
       completePortOnePayment(authFetch, paymentId)
         .then((completion) => {
+          trackEventOnce(
+            `payment-completed:${completion.payment_id}`,
+            "payment_completed",
+            {
+              test_payment: completion.test_payment,
+              source: "payment_redirect",
+            },
+          );
           window.location.replace(
             completion.test_payment
               ? "/payment/success?test=true"
@@ -36,6 +53,10 @@ export default function PortOneReturnPage() {
           );
         })
         .catch((caught) => {
+          trackEvent("payment_failed", {
+            source: "payment_redirect",
+            stage: "completion_verification",
+          });
           setError(
             caught instanceof Error
               ? caught.message

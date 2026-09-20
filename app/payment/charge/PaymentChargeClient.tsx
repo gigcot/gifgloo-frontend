@@ -7,6 +7,7 @@ import { Header } from "@/shared/ui/Header";
 import { HeaderActions } from "@/features/auth/ui/HeaderActions";
 import { useCredits } from "@/features/credits/model/use-credits";
 import { useAuth } from "@/shared/lib/use-auth";
+import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
 import {
   completePortOnePayment,
   createPaymentCheckout,
@@ -89,14 +90,15 @@ export function PaymentChargeClient() {
   const [previewProductId, setPreviewProductId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerEmail, setCustomerEmail] = useState<string>();
   const [checkoutError, setCheckoutError] = useState("");
+  const resolvedCustomerEmail = customerEmail ?? email ?? "";
   const normalizedPhone = customerPhone.replace(/[^0-9]/g, "");
   const canRequestPayment = Boolean(
     customerName.trim()
       && normalizedPhone.length >= 10
       && normalizedPhone.length <= 11
-      && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim()),
+      && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resolvedCustomerEmail.trim()),
   );
 
   useEffect(() => {
@@ -113,12 +115,6 @@ export function PaymentChargeClient() {
       });
   }, [authFetch]);
 
-  useEffect(() => {
-    if (email) {
-      setCustomerEmail((current) => current || email);
-    }
-  }, [email]);
-
   async function handleCheckout(productId: string) {
     if (checkoutProductId) return;
     if (!PORTONE_STORE_ID || !PORTONE_CHANNEL_KEY) {
@@ -132,8 +128,16 @@ export function PaymentChargeClient() {
 
     setCheckoutProductId(productId);
     setCheckoutError("");
+    trackEvent("payment_checkout_started", { product_id: productId });
+    let stage = "checkout_creation";
     try {
       const checkout = await createPaymentCheckout(authFetch, productId);
+      stage = "payment_gateway";
+      trackEvent("payment_gateway_opened", {
+        product_id: productId,
+        amount: checkout.amount,
+        currency: checkout.currency,
+      });
       const paymentResponse = await PortOne.requestPayment({
         storeId: PORTONE_STORE_ID,
         channelKey: PORTONE_CHANNEL_KEY,
@@ -145,26 +149,50 @@ export function PaymentChargeClient() {
         customer: {
           fullName: customerName.trim(),
           phoneNumber: normalizedPhone,
-          email: customerEmail.trim(),
+          email: resolvedCustomerEmail.trim(),
         },
         redirectUrl: `${window.location.origin}/payment/portone-return`,
       });
       if (paymentResponse === undefined) {
+        trackEvent("payment_canceled", {
+          product_id: productId,
+          stage,
+        });
         setCheckoutProductId(null);
         return;
       }
       if (paymentResponse.code !== undefined) {
-        throw new Error(paymentResponse.message ?? "결제가 취소되었습니다");
+        trackEvent("payment_canceled", {
+          product_id: productId,
+          stage,
+          provider_code: paymentResponse.code,
+        });
+        setCheckoutError(paymentResponse.message ?? "결제가 취소되었습니다");
+        setCheckoutProductId(null);
+        return;
       }
 
+      stage = "completion_verification";
       const completion = await completePortOnePayment(
         authFetch,
         paymentResponse.paymentId,
+      );
+      trackEventOnce(
+        `payment-completed:${completion.payment_id}`,
+        "payment_completed",
+        {
+          product_id: productId,
+          revenue: checkout.amount,
+          currency: checkout.currency,
+          test_payment: completion.test_payment,
+          source: "payment_gateway",
+        },
       );
       window.location.assign(
         completion.test_payment ? "/payment/success?test=true" : "/payment/success",
       );
     } catch (error) {
+      trackEvent("payment_failed", { product_id: productId, stage });
       setCheckoutError(
         error instanceof Error ? error.message : "결제창을 만들지 못했습니다",
       );
@@ -232,7 +260,7 @@ export function PaymentChargeClient() {
                 <input
                   type="email"
                   autoComplete="email"
-                  value={customerEmail}
+                  value={resolvedCustomerEmail}
                   onChange={(event) => setCustomerEmail(event.target.value)}
                   className="mt-1.5 w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none focus:border-purple-400/60"
                   placeholder="buyer@example.com"
