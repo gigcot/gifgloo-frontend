@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Gif } from "@/entities/gif/model";
 import { getGifUrl } from "@/entities/gif/model";
+import { trackEvent } from "@/shared/lib/umami";
 
 type Props = {
   gifs: Gif[];
@@ -224,6 +225,7 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
         <ConfirmModal
           gif={preview}
           onConfirm={() => {
+            trackEvent("gif_selected", { source: "featured" });
             onCompose(preview);
             setPreview(null);
           }}

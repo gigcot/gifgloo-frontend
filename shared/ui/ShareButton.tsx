@@ -4,14 +4,16 @@ import { useState } from "react";
 import { API_BASE } from "@/shared/lib/api-base";
 import { copyShareUrl } from "@/shared/lib/share";
 import { useAuth } from "@/shared/lib/use-auth";
+import { trackEvent } from "@/shared/lib/umami";
 
 interface Props {
   shareUrl?: string;
   assetId?: string;
   className?: string;
+  analyticsSource: string;
 }
 
-export function ShareButton({ shareUrl, assetId, className }: Props) {
+export function ShareButton({ shareUrl, assetId, className, analyticsSource }: Props) {
   const { authFetch } = useAuth();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -32,6 +34,10 @@ export function ShareButton({ shareUrl, assetId, className }: Props) {
   async function handleShare() {
     try {
       await copyShareUrl(await getShareUrl());
+      trackEvent("result_shared", {
+        method: "link_copy",
+        source: analyticsSource,
+      });
       setMessage("링크 복사됨");
       setTimeout(() => setMessage(null), 2000);
     } catch {

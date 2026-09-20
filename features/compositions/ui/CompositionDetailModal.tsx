@@ -94,7 +94,10 @@ export function CompositionDetailModal({ job, onClose }: Props) {
         {job.result_url && (
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
-              onClick={() => downloadGif(`${API_BASE}/assets/${job.result_asset_id}/download`)}
+              onClick={() => downloadGif(
+                `${API_BASE}/assets/${job.result_asset_id}/download`,
+                "my_assets",
+              )}
               disabled={!job.result_asset_id}
               className="flex flex-1 items-center justify-center gap-2 rounded-full bg-purple-600 py-3 text-sm font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -102,6 +105,7 @@ export function CompositionDetailModal({ job, onClose }: Props) {
             </button>
             <ShareButton
               assetId={job.result_asset_id ?? undefined}
+              analyticsSource="my_assets"
               className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
             />
           </div>

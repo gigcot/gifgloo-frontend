@@ -5,6 +5,7 @@ import type { Gif } from "@/entities/gif/model";
 import { getGifUrl } from "@/entities/gif/model";
 import { fetchTrending } from "@/shared/api/klipy";
 import { useGifSearch } from "@/features/gif-search/model/use-gif-search";
+import { trackEvent } from "@/shared/lib/umami";
 
 type Props = {
   onSelect: (gif: Gif) => void;
@@ -24,6 +25,13 @@ function GifList({
 }) {
   const { results, loading, error } = useGifSearch(query);
   const gifs = query ? results : trendingGifs;
+
+  function selectGif(gif: Gif) {
+    trackEvent("gif_selected", {
+      source: query ? "compose_search" : "compose_trending",
+    });
+    onSelect(gif);
+  }
 
   if (loading || (!query && trendingGifs.length === 0)) {
     return (
@@ -52,7 +60,7 @@ function GifList({
       {gifs.map((gif) => (
         <div
           key={gif.id}
-          onClick={() => onSelect(gif)}
+          onClick={() => selectGif(gif)}
           className="mb-2 cursor-pointer overflow-hidden rounded-lg hover:opacity-80"
         >
           <img
