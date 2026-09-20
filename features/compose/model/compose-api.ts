@@ -13,6 +13,7 @@ export type SubmitResult =
   | { type: "confirmation"; confirmation: Confirmation }
   | { type: "auth_required" }
   | { type: "insufficient_credit" }
+  | { type: "composition_unavailable"; retryAfterSeconds: number | null }
   | { type: "error"; message: string };
 
 type AuthFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -48,12 +49,11 @@ export async function submitComposition(
       const body = await res.json().catch(() => null);
 
       if (res.status === 429 && body?.error === "COMPOSITION_UNAVAILABLE") {
-        const retryAfter = Number(res.headers.get("Retry-After"));
+        const retryAfterHeader = res.headers.get("Retry-After");
+        const retryAfter = retryAfterHeader === null ? NaN : Number(retryAfterHeader);
         return {
-          type: "error",
-          message: Number.isInteger(retryAfter) && retryAfter > 0
-            ? `합성 요청이 많아요. ${retryAfter}초 후 다시 시도해주세요.`
-            : "현재 다른 합성 작업을 처리 중이에요. 잠시 후 다시 시도해주세요.",
+          type: "composition_unavailable",
+          retryAfterSeconds: Number.isInteger(retryAfter) && retryAfter > 0 ? retryAfter : null,
         };
       }
 

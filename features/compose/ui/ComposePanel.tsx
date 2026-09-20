@@ -23,6 +23,12 @@ type UsageSnapshot = {
   after: number | null;
 };
 
+type CompositionWait = {
+  initialSeconds: number | null;
+  confirmed: boolean;
+  openedAt: number;
+};
+
 const ACCEPTED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -47,6 +53,8 @@ export function ComposePanel() {
   const [showGifSheet, setShowGifSheet] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
+  const [compositionWait, setCompositionWait] = useState<CompositionWait | null>(null);
+  const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -126,6 +134,19 @@ export function ComposePanel() {
     };
   }, [authFetch, usageSnapshot, visibleStage]);
 
+  useEffect(() => {
+    if (!compositionWait || compositionWait.initialSeconds === null) return;
+
+    const deadline = compositionWait.openedAt + compositionWait.initialSeconds * 1000;
+    const updateRemaining = () => {
+      setWaitSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    };
+
+    updateRemaining();
+    const timer = window.setInterval(updateRemaining, 250);
+    return () => window.clearInterval(timer);
+  }, [compositionWait]);
+
   function clearPhoto() {
     if (objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current);
@@ -181,6 +202,15 @@ export function ComposePanel() {
       composingRef.current = false;
       setStage("ready");
       setShowInsufficientPass(true);
+    } else if (result.type === "composition_unavailable") {
+      composingRef.current = false;
+      setStage("ready");
+      setCompositionWait({
+        initialSeconds: result.retryAfterSeconds,
+        confirmed,
+        openedAt: Date.now(),
+      });
+      setWaitSeconds(result.retryAfterSeconds);
     } else {
       composingRef.current = false;
       setError(result.message);
@@ -196,6 +226,8 @@ export function ComposePanel() {
     setConfirmation(null);
     setFileError(null);
     setUsageSnapshot(null);
+    setCompositionWait(null);
+    setWaitSeconds(null);
     setJobId(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -391,6 +423,80 @@ export function ComposePanel() {
                 className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
               >
                 네, 진행할게요
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {compositionWait && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+          onClick={() => setCompositionWait(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="composition-wait-title"
+            className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-purple-300/20 bg-[#141217] p-7 shadow-[0_24px_100px_rgba(88,28,135,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-purple-500/20 blur-3xl" />
+            <div className="relative flex flex-col items-center text-center">
+              <div
+                className="flex h-24 w-24 items-center justify-center rounded-full p-[5px] shadow-[0_0_36px_rgba(168,85,247,0.2)]"
+                style={{
+                  background: compositionWait.initialSeconds && waitSeconds !== null
+                    ? `conic-gradient(#a855f7 ${(waitSeconds / compositionWait.initialSeconds) * 360}deg, rgba(255,255,255,0.08) 0deg)`
+                    : "rgba(168,85,247,0.18)",
+                }}
+              >
+                <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-[#171419]">
+                  {waitSeconds !== null ? (
+                    <>
+                      <span className="text-3xl font-black tabular-nums text-white">{waitSeconds}</span>
+                      <span className="text-[11px] font-semibold text-purple-300">초 남음</span>
+                    </>
+                  ) : (
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-purple-300">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l2.5 2.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+
+              <h2 id="composition-wait-title" className="mt-6 text-xl font-bold text-white">
+                {waitSeconds === 0 ? "이제 합성을 시작할 수 있어요" : "조금만 기다려 주세요"}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-white/50">
+                {waitSeconds === null
+                  ? "현재 다른 합성 작업을 처리하고 있어요. 잠시 후 다시 시도해 주세요."
+                  : waitSeconds === 0
+                    ? "대기 시간이 끝났어요. 아래 버튼을 눌러 다시 시작해 주세요."
+                    : "안정적인 합성을 위해 다음 요청까지 잠시 쉬어가고 있어요."}
+              </p>
+
+              <button
+                onClick={() => {
+                  if (waitSeconds !== 0) return;
+                  const confirmed = compositionWait.confirmed;
+                  setCompositionWait(null);
+                  void handleCompose(confirmed);
+                }}
+                disabled={waitSeconds !== 0}
+                className="mt-6 w-full rounded-full bg-purple-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-purple-950/40 transition-all hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-white/[0.07] disabled:text-white/30 disabled:shadow-none"
+              >
+                {waitSeconds === null
+                  ? "잠시 후 다시 시도해 주세요"
+                  : waitSeconds === 0
+                    ? "다시 합성하기"
+                    : `${waitSeconds}초 후 다시 시도`}
+              </button>
+              <button
+                onClick={() => setCompositionWait(null)}
+                className="mt-3 px-4 py-2 text-xs font-medium text-white/40 transition-colors hover:text-white/70"
+              >
+                닫기
               </button>
             </div>
           </div>
