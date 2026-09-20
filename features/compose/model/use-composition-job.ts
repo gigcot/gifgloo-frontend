@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/shared/lib/api-base";
+import { trackEventOnce } from "@/shared/lib/umami";
 
 type ProcessingStage =
   | "EXTRACTING_FRAMES"
@@ -135,6 +136,10 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
       }
 
       if (data.status === "COMPLETED" && data.result_url) {
+        trackEventOnce(
+          `composition_completed:${activeJobId}`,
+          "composition_completed",
+        );
         setSnapshot({
           jobId: activeJobId,
           state: {
@@ -154,6 +159,11 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
       }
 
       if (data.status === "FAILED") {
+        trackEventOnce(
+          `composition_failed:${activeJobId}`,
+          "composition_failed",
+          { stage: data.stage ?? "unknown" },
+        );
         const creditSettlement = parseCreditSettlement(data.credit_settlement);
         updateState((current) => ({
           ...current,

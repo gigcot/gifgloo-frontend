@@ -3,6 +3,7 @@
 import type { Gif } from "@/entities/gif/model";
 import { getGifUrl } from "@/entities/gif/model";
 import { useGifSearch } from "@/features/gif-search/model/use-gif-search";
+import { trackEvent } from "@/shared/lib/umami";
 
 type Props = {
   query: string;
@@ -35,6 +36,11 @@ export function GifGrid({
   const gifs = query ? searchResults : trendingGifs;
   const hasMore = query ? searchHasMore : trendingHasMore;
   const loadingMore = query ? searchLoadingMore : trendingLoadingMore;
+
+  function selectGif(gif: Gif) {
+    trackEvent("gif_selected", { source: query ? "search" : "trending" });
+    onSelect(gif);
+  }
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     const target = e.currentTarget;
@@ -96,7 +102,7 @@ export function GifGrid({
         {gifs.map((gif) => (
           <div
             key={gif.id}
-            onClick={() => onSelect(gif)}
+            onClick={() => selectGif(gif)}
             className={`mb-2 cursor-pointer overflow-hidden rounded-lg transition-all ${
               selectedId === gif.id
                 ? "ring-2 ring-purple-500 ring-offset-1 ring-offset-[#0d0d0d]"

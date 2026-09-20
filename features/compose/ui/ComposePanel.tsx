@@ -72,6 +72,7 @@ export function ComposePanel() {
     objectUrlRef.current = url;
     setPhotoFile(file);
     setMyPhoto(url);
+    trackEvent("photo_uploaded", { file_type: file.type || "unknown" });
   }, []);
 
   // GIF 복원 (로그인 전 선택 → 로그인 후 자동 진입)
@@ -204,6 +205,7 @@ export function ComposePanel() {
     const result = await submitComposition(authFetch, gif, photoFile, confirmed);
 
     if (result.type === "job") {
+      trackEvent("composition_requested");
       setJobId(result.jobId);
     } else if (result.type === "confirmation") {
       composingRef.current = false;
@@ -581,7 +583,10 @@ export function ComposePanel() {
 
           <div className="flex w-full flex-col gap-3">
             <button
-              onClick={() => job.resultAssetId && downloadGif(`${API_BASE}/assets/${job.resultAssetId}/download`)}
+              onClick={() => job.resultAssetId && downloadGif(
+                `${API_BASE}/assets/${job.resultAssetId}/download`,
+                "composition_result",
+              )}
               disabled={!job.resultAssetId}
               className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500"
             >
@@ -590,6 +595,7 @@ export function ComposePanel() {
             <div className="flex gap-2">
               <ShareButton
                 assetId={job.resultAssetId ?? undefined}
+                analyticsSource="composition_result"
                 className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
               />
               <button
