@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { submitCompositionFeedback } from "@/features/compose/model/composition-feedback-api";
 import { trackEvent } from "@/shared/lib/umami";
 
@@ -37,18 +37,32 @@ export function CompositionFeedbackModal({
     }
   }
 
-  function skip() {
+  function dismiss() {
+    if (submitting) return;
     trackEvent("composition_feedback_skipped");
     onClose();
   }
 
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") dismiss();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+      onClick={dismiss}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="feedback-title"
         className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#151317] p-6 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
       >
         <img
           src={resultUrl}
@@ -82,15 +96,6 @@ export function CompositionFeedbackModal({
         </div>
 
         {error && <p role="alert" className="mt-3 text-center text-xs text-red-300">{error}</p>}
-
-        <button
-          type="button"
-          onClick={skip}
-          disabled={submitting}
-          className="mt-3 w-full py-2 text-xs font-medium text-white/35 hover:text-white/60 disabled:opacity-40"
-        >
-          다음에 할게요
-        </button>
       </div>
     </div>
   );
