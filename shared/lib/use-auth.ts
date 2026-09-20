@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { API_BASE } from "./api-base";
 
 type AuthState = {
@@ -9,28 +9,67 @@ type AuthState = {
   email: string | null;
 };
 
+const INITIAL_AUTH_STATE: AuthState = {
+  isLoggedIn: false,
+  checked: false,
+  email: null,
+};
+
+let authState = INITIAL_AUTH_STATE;
+let authRequest: Promise<AuthState> | null = null;
+const authListeners = new Set<() => void>();
+
+function setAuthState(next: AuthState): void {
+  authState = next;
+  for (const listener of authListeners) listener();
+}
+
+function subscribe(listener: () => void): () => void {
+  authListeners.add(listener);
+  return () => authListeners.delete(listener);
+}
+
+function getAuthSnapshot(): AuthState {
+  return authState;
+}
+
+async function loadAuth(force = false): Promise<AuthState> {
+  if (!force && authState.checked) return authState;
+  if (authRequest) return authRequest;
+
+  authRequest = fetch(`${API_BASE}/users/me`, { credentials: "include" })
+    .then(async (response) => {
+      if (!response.ok) {
+        return { isLoggedIn: false, checked: true, email: null };
+      }
+      const data = await response.json();
+      return {
+        isLoggedIn: true,
+        checked: true,
+        email: typeof data.email === "string" ? data.email : null,
+      };
+    })
+    .catch(() => ({ isLoggedIn: false, checked: true, email: null }))
+    .then((next) => {
+      setAuthState(next);
+      return next;
+    })
+    .finally(() => {
+      authRequest = null;
+    });
+
+  return authRequest;
+}
+
 export function useAuth() {
-  const [auth, setAuth] = useState<AuthState>({
-    isLoggedIn: false,
-    checked: false,
-    email: null,
-  });
+  const auth = useSyncExternalStore(
+    subscribe,
+    getAuthSnapshot,
+    () => INITIAL_AUTH_STATE,
+  );
 
   useEffect(() => {
-    fetch(`${API_BASE}/users/me`, { credentials: "include" })
-      .then(async (res) => {
-        if (!res.ok) {
-          setAuth({ isLoggedIn: false, checked: true, email: null });
-          return;
-        }
-        const data = await res.json();
-        setAuth({
-          isLoggedIn: true,
-          checked: true,
-          email: typeof data.email === "string" ? data.email : null,
-        });
-      })
-      .catch(() => setAuth({ isLoggedIn: false, checked: true, email: null }));
+    void loadAuth();
   }, []);
 
   const authFetch = useCallback(
@@ -41,7 +80,7 @@ export function useAuth() {
       });
 
       if (res.status === 401 || res.status === 403) {
-        setAuth({ isLoggedIn: false, checked: true, email: null });
+        setAuthState({ isLoggedIn: false, checked: true, email: null });
       }
 
       return res;
@@ -50,24 +89,7 @@ export function useAuth() {
   );
 
   const checkAuth = useCallback(async (): Promise<boolean> => {
-    try {
-      const res = await fetch(`${API_BASE}/users/me`, { credentials: "include" });
-      const ok = res.ok;
-      if (!ok) {
-        setAuth({ isLoggedIn: false, checked: true, email: null });
-        return false;
-      }
-      const data = await res.json();
-      setAuth({
-        isLoggedIn: true,
-        checked: true,
-        email: typeof data.email === "string" ? data.email : null,
-      });
-      return ok;
-    } catch {
-      setAuth({ isLoggedIn: false, checked: true, email: null });
-      return false;
-    }
+    return (await loadAuth(true)).isLoggedIn;
   }, []);
 
   return {

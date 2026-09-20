@@ -1,7 +1,7 @@
 "use client";
 
 import type { Gif } from "@/entities/gif/model";
-import { getGifUrl } from "@/entities/gif/model";
+import { GifMedia } from "@/entities/gif/ui/GifMedia";
 import { useGifSearch } from "@/features/gif-search/model/use-gif-search";
 import { trackEvent } from "@/shared/lib/umami";
 
@@ -103,17 +103,17 @@ export function GifGrid({
           <div
             key={gif.id}
             onClick={() => selectGif(gif)}
-            className={`mb-2 cursor-pointer overflow-hidden rounded-lg transition-all ${
+            className={`mb-2 cursor-pointer overflow-hidden rounded-lg transition-all [contain-intrinsic-size:220px] [content-visibility:auto] ${
               selectedId === gif.id
                 ? "ring-2 ring-purple-500 ring-offset-1 ring-offset-[#0d0d0d]"
                 : "hover:opacity-80"
             }`}
           >
-            <img
-              src={getGifUrl(gif, "md")}
+            <GifMedia
+              gif={gif}
+              size="sm"
               alt={gif.title}
-              className="w-full object-cover"
-              style={gif.blur_preview ? { background: `url(${gif.blur_preview}) center/cover` } : {}}
+              className="h-full w-full object-cover"
             />
           </div>
         ))}

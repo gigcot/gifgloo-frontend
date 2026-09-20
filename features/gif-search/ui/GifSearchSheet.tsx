@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { Gif } from "@/entities/gif/model";
-import { getGifUrl } from "@/entities/gif/model";
+import { GifMedia } from "@/entities/gif/ui/GifMedia";
 import { fetchTrending } from "@/shared/api/klipy";
 import { useGifSearch } from "@/features/gif-search/model/use-gif-search";
 import { trackEvent } from "@/shared/lib/umami";
@@ -13,18 +13,22 @@ type Props = {
 };
 
 const TRENDING_CATEGORIES = ["Love", "Happy", "Hello", "Excited", "Funny", "Hug", "Party", "Sad"];
+let cachedTrendingGifs: Gif[] | null = null;
 
 function GifList({
   query,
   trendingGifs,
+  trendingError,
   onSelect,
 }: {
   query: string;
   trendingGifs: Gif[];
+  trendingError: boolean;
   onSelect: (gif: Gif) => void;
 }) {
-  const { results, loading, error } = useGifSearch(query);
+  const { results, loading, error: searchError } = useGifSearch(query);
   const gifs = query ? results : trendingGifs;
+  const error = query ? searchError : trendingError;
 
   function selectGif(gif: Gif) {
     trackEvent("gif_selected", {
@@ -33,7 +37,7 @@ function GifList({
     onSelect(gif);
   }
 
-  if (loading || (!query && trendingGifs.length === 0)) {
+  if (loading || (!query && trendingGifs.length === 0 && !trendingError)) {
     return (
       <div className="columns-2 gap-2 sm:columns-3">
         {Array.from({ length: 12 }).map((_, i) => (
@@ -61,13 +65,13 @@ function GifList({
         <div
           key={gif.id}
           onClick={() => selectGif(gif)}
-          className="mb-2 cursor-pointer overflow-hidden rounded-lg hover:opacity-80"
+          className="mb-2 cursor-pointer overflow-hidden rounded-lg hover:opacity-80 [contain-intrinsic-size:180px] [content-visibility:auto]"
         >
-          <img
-            src={getGifUrl(gif, "md")}
+          <GifMedia
+            gif={gif}
+            size="sm"
             alt={gif.title}
-            className="w-full object-cover"
-            style={gif.blur_preview ? { background: `url(${gif.blur_preview}) center/cover` } : {}}
+            className="h-full w-full object-cover"
           />
         </div>
       ))}
@@ -77,11 +81,21 @@ function GifList({
 
 export function GifSearchSheet({ onSelect, onClose }: Props) {
   const [query, setQuery] = useState("");
-  const [trendingGifs, setTrendingGifs] = useState<Gif[]>([]);
+  const [trendingGifs, setTrendingGifs] = useState<Gif[]>(
+    () => cachedTrendingGifs ?? [],
+  );
+  const [trendingError, setTrendingError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchTrending(1, 24).then(setTrendingGifs).catch(() => {});
+    if (!cachedTrendingGifs) {
+      fetchTrending(1, 12)
+        .then((gifs) => {
+          cachedTrendingGifs = gifs;
+          setTrendingGifs(gifs);
+        })
+        .catch(() => setTrendingError(true));
+    }
     inputRef.current?.focus();
   }, []);
 
@@ -145,7 +159,12 @@ export function GifSearchSheet({ onSelect, onClose }: Props) {
 
         {/* GIF 그리드 */}
         <div className="flex-1 overflow-y-auto px-4 pb-6">
-          <GifList query={query} trendingGifs={trendingGifs} onSelect={onSelect} />
+          <GifList
+            query={query}
+            trendingGifs={trendingGifs}
+            trendingError={trendingError}
+            onSelect={onSelect}
+          />
         </div>
       </div>
     </div>

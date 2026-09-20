@@ -1,18 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import { Footer } from "@/shared/ui/Footer";
+import { WebVitalsReporter } from "@/shared/ui/WebVitalsReporter";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "gifgloo",
@@ -27,14 +17,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <Script
           src="https://cloud.umami.is/script.js"
           data-website-id="8290b22d-046d-42de-802e-bad85d1cb8ca"
           strategy="afterInteractive"
         />
+        <WebVitalsReporter />
         {children}
         <Footer />
       </body>
