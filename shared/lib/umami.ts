@@ -4,13 +4,44 @@ type PendingEvent = { eventName: string; eventData?: UmamiEventData };
 const trackedEvents = new Set<string>();
 const pendingEvents: PendingEvent[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingUserId: string | null = null;
+let identifyTimer: ReturnType<typeof setTimeout> | null = null;
 
 declare global {
   interface Window {
     umami?: {
       track: (eventName: string, eventData?: UmamiEventData) => void;
+      identify: (userId: string) => void;
     };
   }
+}
+
+export function identifyUser(userId: string): void {
+  pendingUserId = userId;
+  if (window.umami) {
+    window.umami.identify(userId);
+    pendingUserId = null;
+    return;
+  }
+  if (identifyTimer) return;
+
+  let attempts = 0;
+  identifyTimer = setTimeout(function identify() {
+    if (!window.umami) {
+      attempts += 1;
+      if (attempts >= 20) {
+        pendingUserId = null;
+        identifyTimer = null;
+        return;
+      }
+      identifyTimer = setTimeout(identify, 250);
+      return;
+    }
+
+    if (pendingUserId) window.umami.identify(pendingUserId);
+    pendingUserId = null;
+    identifyTimer = null;
+  }, 250);
 }
 
 export function trackEvent(eventName: string, eventData?: UmamiEventData): void {

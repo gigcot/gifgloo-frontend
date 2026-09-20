@@ -6,12 +6,14 @@ import { API_BASE } from "./api-base";
 type AuthState = {
   isLoggedIn: boolean;
   checked: boolean;
+  userId: string | null;
   email: string | null;
 };
 
 const INITIAL_AUTH_STATE: AuthState = {
   isLoggedIn: false,
   checked: false,
+  userId: null,
   email: null,
 };
 
@@ -40,16 +42,17 @@ async function loadAuth(force = false): Promise<AuthState> {
   authRequest = fetch(`${API_BASE}/users/me`, { credentials: "include" })
     .then(async (response) => {
       if (!response.ok) {
-        return { isLoggedIn: false, checked: true, email: null };
+        return { isLoggedIn: false, checked: true, userId: null, email: null };
       }
       const data = await response.json();
       return {
         isLoggedIn: true,
         checked: true,
+        userId: typeof data.user_id === "string" ? data.user_id : null,
         email: typeof data.email === "string" ? data.email : null,
       };
     })
-    .catch(() => ({ isLoggedIn: false, checked: true, email: null }))
+    .catch(() => ({ isLoggedIn: false, checked: true, userId: null, email: null }))
     .then((next) => {
       setAuthState(next);
       return next;
@@ -80,7 +83,7 @@ export function useAuth() {
       });
 
       if (res.status === 401 || res.status === 403) {
-        setAuthState({ isLoggedIn: false, checked: true, email: null });
+        setAuthState({ isLoggedIn: false, checked: true, userId: null, email: null });
       }
 
       return res;
@@ -95,6 +98,7 @@ export function useAuth() {
   return {
     isLoggedIn: auth.isLoggedIn,
     checked: auth.checked,
+    userId: auth.userId,
     email: auth.email,
     authFetch,
     checkAuth,
