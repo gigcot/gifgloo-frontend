@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { Gif } from "@/entities/gif/model";
-import { getGifUrl } from "@/entities/gif/model";
+import { GifMedia } from "@/entities/gif/ui/GifMedia";
 import { trackEvent } from "@/shared/lib/umami";
 
 type Props = {
@@ -29,7 +29,13 @@ function ConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 overflow-hidden rounded-xl border border-white/10 bg-black">
-          <img src={getGifUrl(gif, "md")} alt={gif.title} className="w-full object-cover" />
+          <GifMedia
+            gif={gif}
+            size="md"
+            alt={gif.title}
+            eager
+            className="h-full w-full object-cover"
+          />
         </div>
         <p className="mb-1 text-center text-lg font-bold text-white">이 GIF로 합성해봐요!</p>
         <p className="mb-5 text-center text-sm text-white/40">{gif.title}</p>
@@ -53,9 +59,9 @@ function ConfirmModal({
 }
 
 const FEATURED_RESULTS = [
-  { src: "/insung_hwang.gif", alt: "합성 결과 예시 1" },
-  { src: "/punch_pepe_hwang.gif", alt: "합성 결과 예시 2" },
-  { src: "/punch_pepe_podo.gif", alt: "합성 결과 예시 3" },
+  { src: "/insung_hwang.mp4", alt: "합성 결과 예시 1" },
+  { src: "/punch_pepe_hwang.mp4", alt: "합성 결과 예시 2" },
+  { src: "/punch_pepe_podo.mp4", alt: "합성 결과 예시 3" },
 ];
 
 export function TrendingShowcase({ gifs, onCompose }: Props) {
@@ -64,6 +70,10 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [featuredSlide, setFeaturedSlide] = useState(0);
   const [preview, setPreview] = useState<Gif | null>(null);
+  const currentGif = allGifs.length > 0
+    ? allGifs[currentSlide % allGifs.length]
+    : null;
+  const currentFeatured = FEATURED_RESULTS[featuredSlide];
 
   useEffect(() => {
     if (allGifs.length === 0) return;
@@ -97,30 +107,32 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
             <div className="flex flex-1 flex-col gap-2">
               <p className="text-xs font-semibold text-white/70">지금 많이 사용되는 GIF</p>
               <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl" style={{ aspectRatio: "1/1" }}>
-                {allGifs.map((gif, i) => (
-                  <div
-                    key={gif.id}
-                    className={`absolute inset-0 transition-opacity duration-700 ${
-                      i === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none"
-                    }`}
-                  >
-                    <img
-                      src={getGifUrl(gif, "md")}
-                      alt={gif.title}
-                      onClick={() => setPreview(gif)}
-                      className="h-full w-full cursor-pointer object-contain"
-                    />
+                {currentGif && (
+                  <div className="absolute inset-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreview(currentGif)}
+                      className="h-full w-full"
+                    >
+                      <GifMedia
+                        gif={currentGif}
+                        size="md"
+                        alt={currentGif.title}
+                        eager
+                        className="h-full w-full object-contain"
+                      />
+                    </button>
                     <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/70 to-transparent" />
                     <div className="absolute bottom-3 left-3 right-3">
                       <button
-                        onClick={() => setPreview(gif)}
+                        onClick={() => setPreview(currentGif)}
                         className="rounded-full bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500"
                       >
                         나도 만들기
                       </button>
                     </div>
                   </div>
-                ))}
+                )}
                 <div className="absolute bottom-3 right-3 flex gap-1">
                   {allGifs.map((_, i) => (
                     <button
@@ -139,16 +151,17 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
             <div className="flex flex-1 flex-col gap-2">
               <p className="text-xs font-semibold text-white/70">이렇게 만들 수 있어요</p>
               <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl" style={{ aspectRatio: "1/1" }}>
-                {FEATURED_RESULTS.map((item, i) => (
-                  <div
-                    key={i}
-                    className={`absolute inset-0 transition-opacity duration-700 ${
-                      i === featuredSlide ? "opacity-100" : "opacity-0"
-                    }`}
-                  >
-                    <img src={item.src} alt={item.alt} className="h-full w-full object-contain" />
-                  </div>
-                ))}
+                <video
+                  key={currentFeatured.src}
+                  src={currentFeatured.src}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  aria-label={currentFeatured.alt}
+                  className="h-full w-full object-contain"
+                />
                 <div className="absolute bottom-3 right-3 flex gap-1">
                   {FEATURED_RESULTS.map((_, i) => (
                     <button
@@ -176,9 +189,11 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
                     onClick={() => setPreview(gif)}
                     className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl"
                   >
-                    <img
-                      src={getGifUrl(gif, "sm")}
+                    <GifMedia
+                      gif={gif}
+                      size="sm"
                       alt={gif.title}
+                      eager
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
@@ -194,16 +209,17 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
             <div className="flex w-[38%] flex-col gap-2">
               <p className="text-xs font-semibold text-white/70">이렇게 만들 수 있어요</p>
               <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl">
-                {FEATURED_RESULTS.map((item, i) => (
-                  <div
-                    key={i}
-                    className={`absolute inset-0 transition-opacity duration-700 ${
-                      i === featuredSlide ? "opacity-100" : "opacity-0"
-                    }`}
-                  >
-                    <img src={item.src} alt={item.alt} className="h-full w-full object-contain" />
-                  </div>
-                ))}
+                <video
+                  key={currentFeatured.src}
+                  src={currentFeatured.src}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  aria-label={currentFeatured.alt}
+                  className="h-full w-full object-contain"
+                />
                 <div className="absolute bottom-3 right-3 flex gap-1">
                   {FEATURED_RESULTS.map((_, i) => (
                     <button

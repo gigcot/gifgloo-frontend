@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import type { Gif } from "@/entities/gif/model";
-import { getGifUrl } from "@/entities/gif/model";
+import { GifMedia } from "@/entities/gif/ui/GifMedia";
 import { setPendingPhoto } from "@/features/compose/model/pending-photo";
 
 const ACCEPTED_IMAGE_TYPES = new Set([
@@ -38,10 +38,13 @@ export function ComposeBar({ selectedGif, onCompose }: Props) {
       <div className="pointer-events-auto mx-auto flex max-w-4xl items-center gap-3 rounded-2xl border border-white/10 bg-[#0f0f12]/95 p-2 shadow-[0_20px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl">
         {selectedGif && (
           <div className="hidden items-center gap-3 sm:flex">
-            <img
-              src={getGifUrl(selectedGif, "xs")}
+            <GifMedia
+              gif={selectedGif}
+              size="xs"
               alt="selected"
-              className="h-14 w-20 rounded-lg border border-white/10 bg-black object-cover"
+              eager
+              containerClassName="h-14 w-20 shrink-0 rounded-lg border border-white/10 bg-black"
+              className="h-full w-full object-cover"
             />
             <div className="min-w-0">
               <p className="text-xs font-semibold text-purple-200">GIF 선택됨</p>
@@ -51,10 +54,13 @@ export function ComposeBar({ selectedGif, onCompose }: Props) {
         )}
         <div className="flex flex-1 items-center gap-2">
           {selectedGif && (
-            <img
-              src={getGifUrl(selectedGif, "xs")}
+            <GifMedia
+              gif={selectedGif}
+              size="xs"
               alt="selected"
-              className="h-11 w-14 rounded-md border border-white/10 bg-black object-cover sm:hidden"
+              eager
+              containerClassName="h-11 w-14 shrink-0 rounded-md border border-white/10 bg-black sm:hidden"
+              className="h-full w-full object-cover"
             />
           )}
           <input
