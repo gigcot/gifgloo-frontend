@@ -15,6 +15,8 @@ import { downloadGif } from "@/shared/lib/download";
 import { GifSearchSheet } from "@/features/gif-search/ui/GifSearchSheet";
 import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
 import { fetchCreditBalance } from "@/features/credits/model/use-credits";
+import { CompositionFeedbackModal } from "@/features/compose/ui/CompositionFeedbackModal";
+import { trackEvent } from "@/shared/lib/umami";
 
 type Stage = "ready" | "processing" | "done" | "error";
 
@@ -55,10 +57,12 @@ export function ComposePanel() {
   const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
   const [compositionWait, setCompositionWait] = useState<CompositionWait | null>(null);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const composingRef = useRef(false);
+  const feedbackPromptedJobRef = useRef<string | null>(null);
 
   const job = useCompositionJob(jobId);
 
@@ -133,6 +137,17 @@ export function ComposePanel() {
       cancelled = true;
     };
   }, [authFetch, usageSnapshot, visibleStage]);
+
+  useEffect(() => {
+    if (!job.isComplete || !jobId || feedbackPromptedJobRef.current === jobId) return;
+
+    feedbackPromptedJobRef.current = jobId;
+    const timer = window.setTimeout(() => {
+      trackEvent("composition_feedback_opened");
+      setShowFeedback(true);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [job.isComplete, jobId]);
 
   useEffect(() => {
     if (!compositionWait || compositionWait.initialSeconds === null) return;
@@ -229,6 +244,7 @@ export function ComposePanel() {
     setCompositionWait(null);
     setWaitSeconds(null);
     setJobId(null);
+    setShowFeedback(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -616,6 +632,15 @@ export function ComposePanel() {
       <GifSearchSheet
         onSelect={(selected) => { setGif(selected); setShowGifSheet(false); }}
         onClose={() => setShowGifSheet(false)}
+      />
+    )}
+
+    {showFeedback && jobId && job.resultUrl && (
+      <CompositionFeedbackModal
+        authFetch={authFetch}
+        compositionJobId={jobId}
+        resultUrl={job.resultUrl}
+        onClose={() => setShowFeedback(false)}
       />
     )}
     </>
