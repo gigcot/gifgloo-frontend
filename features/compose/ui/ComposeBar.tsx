@@ -4,14 +4,7 @@ import { useRef } from "react";
 import type { Gif } from "@/entities/gif/model";
 import { GifMedia } from "@/entities/gif/ui/GifMedia";
 import { setPendingPhoto } from "@/features/compose/model/pending-photo";
-
-const ACCEPTED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-]);
+import { isSupportedImageFile } from "@/features/compose/model/prepare-image-upload";
 
 type Props = {
   selectedGif: Gif | null;
@@ -24,7 +17,7 @@ export function ComposeBar({ selectedGif, onCompose }: Props) {
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) return;
+    if (!isSupportedImageFile(file)) return;
     await setPendingPhoto(file);
     onCompose();
   }

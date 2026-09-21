@@ -18,6 +18,65 @@ export type SubmitResult =
 
 type AuthFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+type PreparedUpload = {
+  uploadId: string;
+};
+
+const preparedUploads = new WeakMap<File, PreparedUpload>();
+
+async function prepareDirectUpload(
+  authFetch: AuthFetch,
+  file: File,
+): Promise<PreparedUpload | SubmitResult> {
+  const existing = preparedUploads.get(file);
+  if (existing) return existing;
+
+  const { prepareImageUpload } = await import("@/features/compose/model/prepare-image-upload");
+  const image = await prepareImageUpload(file);
+  const prepareResponse = await authFetch(`${API_BASE}/compositions/uploads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content_type: image.type, size: image.size }),
+  });
+  if (!prepareResponse.ok) {
+    const body = await prepareResponse.json().catch(() => null);
+    return {
+      type: "error",
+      message: typeof body?.message === "string"
+        ? body.message
+        : STATUS_MESSAGES[prepareResponse.status] ?? "이미지 업로드를 준비하지 못했습니다.",
+    };
+  }
+
+  const prepared = await prepareResponse.json();
+  if (
+    typeof prepared.upload_id !== "string" ||
+    typeof prepared.upload_url !== "string" ||
+    typeof prepared.headers !== "object" ||
+    prepared.headers === null
+  ) {
+    return { type: "error", message: "이미지 업로드 응답이 올바르지 않습니다." };
+  }
+
+  let uploadResponse: Response;
+  try {
+    uploadResponse = await fetch(prepared.upload_url, {
+      method: "PUT",
+      headers: prepared.headers as Record<string, string>,
+      body: image,
+    });
+  } catch {
+    return { type: "error", message: "이미지를 업로드하지 못했습니다. 네트워크를 확인해주세요." };
+  }
+  if (!uploadResponse.ok) {
+    return { type: "error", message: "이미지를 업로드하지 못했습니다. 다시 시도해주세요." };
+  }
+
+  const result = { uploadId: prepared.upload_id };
+  preparedUploads.set(file, result);
+  return result;
+}
+
 const STATUS_MESSAGES: Record<number, string> = {
   400: "요청이 올바르지 않아요. 다시 시도해주세요.",
   402: "사용 가능한 합성 이용권이 없어요.",
@@ -34,15 +93,18 @@ export async function submitComposition(
   photoFile: File,
   confirmed: boolean
 ): Promise<SubmitResult> {
-  const form = new FormData();
-  form.append("gif_url", getGifUrl(gif, "hd"));
-  form.append("target_file", photoFile);
-  if (confirmed) form.append("acknowledge_frame_reduction", "true");
-
   try {
-    const res = await authFetch(`${API_BASE}/compositions`, {
+    const upload = await prepareDirectUpload(authFetch, photoFile);
+    if ("type" in upload) return upload;
+
+    const res = await authFetch(`${API_BASE}/compositions/from-upload`, {
       method: "POST",
-      body: form,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        gif_url: getGifUrl(gif, "hd"),
+        upload_id: upload.uploadId,
+        acknowledge_frame_reduction: confirmed,
+      }),
     });
 
     if (!res.ok) {
@@ -81,8 +143,15 @@ export async function submitComposition(
       return { type: "error", message: "서버 응답이 올바르지 않습니다. 잠시 후 다시 시도해주세요." };
     }
 
+    preparedUploads.delete(photoFile);
+
     return { type: "job", jobId: data.composition_job_id };
-  } catch {
-    return { type: "error", message: "네트워크 오류가 발생했어요. 인터넷 연결을 확인해주세요." };
+  } catch (error) {
+    return {
+      type: "error",
+      message: error instanceof Error
+        ? error.message
+        : "네트워크 오류가 발생했어요. 인터넷 연결을 확인해주세요.",
+    };
   }
 }

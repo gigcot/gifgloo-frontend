@@ -17,6 +17,7 @@ import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
 import { fetchCreditBalance } from "@/features/credits/model/use-credits";
 import { CompositionFeedbackModal } from "@/features/compose/ui/CompositionFeedbackModal";
 import { trackEvent } from "@/shared/lib/umami";
+import { isSupportedImageFile } from "@/features/compose/model/prepare-image-upload";
 
 type Stage = "ready" | "processing" | "done" | "error";
 type RetrySource = "completed" | "failed";
@@ -31,14 +32,6 @@ type CompositionWait = {
   confirmed: boolean;
   openedAt: number;
 };
-
-const ACCEPTED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-]);
 
 export function ComposePanel() {
   const router = useRouter();
@@ -178,7 +171,7 @@ export function ComposePanel() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+    if (!isSupportedImageFile(file)) {
       setFileError("이미지 파일만 업로드할 수 있어요 (JPG, PNG, WebP, HEIC)");
       e.target.value = "";
       return;
