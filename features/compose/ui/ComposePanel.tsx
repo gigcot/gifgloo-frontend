@@ -19,6 +19,7 @@ import { CompositionFeedbackModal } from "@/features/compose/ui/CompositionFeedb
 import { trackEvent } from "@/shared/lib/umami";
 
 type Stage = "ready" | "processing" | "done" | "error";
+type RetrySource = "completed" | "failed";
 
 type UsageSnapshot = {
   before: number;
@@ -63,6 +64,7 @@ export function ComposePanel() {
   const objectUrlRef = useRef<string | null>(null);
   const composingRef = useRef(false);
   const feedbackPromptedJobRef = useRef<string | null>(null);
+  const retrySourceRef = useRef<RetrySource | null>(null);
 
   const job = useCompositionJob(jobId);
 
@@ -206,6 +208,12 @@ export function ComposePanel() {
 
     if (result.type === "job") {
       trackEvent("composition_requested");
+      if (retrySourceRef.current) {
+        trackEvent("composition_retried", {
+          from_status: retrySourceRef.current,
+        });
+        retrySourceRef.current = null;
+      }
       setJobId(result.jobId);
     } else if (result.type === "confirmation") {
       composingRef.current = false;
@@ -235,7 +243,13 @@ export function ComposePanel() {
     }
   }
 
-  function handleReset() {
+  function handleReset(source: RetrySource) {
+    trackEvent(
+      source === "completed"
+        ? "composition_restart_clicked"
+        : "composition_retry_clicked",
+    );
+    retrySourceRef.current = source;
     composingRef.current = false;
     clearPhoto();
     setStage("ready");
@@ -599,7 +613,7 @@ export function ComposePanel() {
                 className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
               />
               <button
-                onClick={handleReset}
+                onClick={() => handleReset("completed")}
                 className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
               >
                 다시 만들기
@@ -625,7 +639,7 @@ export function ComposePanel() {
             </div>
           )}
           <button
-            onClick={handleReset}
+            onClick={() => handleReset("failed")}
             className="rounded-full border border-white/20 px-8 py-3 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:text-white"
           >
             다시 시도
