@@ -71,6 +71,17 @@ type CreditCase = {
   credit_lots: CreditLot[];
 };
 
+type CreditCaseResponse = Omit<CreditCase, "user" | "credit_transactions" | "credit_lots"> & {
+  user: Omit<CreditCase["user"], "credit_remaining_uses"> & {
+    credit_remaining_uses?: number;
+  };
+  credit_transactions: Array<Omit<CreditTransaction, "signed_amount" | "uses"> & {
+    signed_amount?: number;
+    uses?: number;
+  }>;
+  credit_lots?: CreditLot[];
+};
+
 type GrantForm = {
   amount: string;
   reason: string;
@@ -113,6 +124,28 @@ function statusBadgeClass(status: string) {
 
 function makeIdempotencyKey() {
   return crypto.randomUUID();
+}
+
+function normalizeCreditCase(data: CreditCaseResponse): CreditCase {
+  return {
+    ...data,
+    user: {
+      ...data.user,
+      credit_remaining_uses: data.user.credit_remaining_uses
+        ?? Math.floor(data.user.credit_balance / 10),
+    },
+    credit_transactions: data.credit_transactions.map((transaction) => {
+      const positive = transaction.transaction_type === "CHARGE"
+        || transaction.transaction_type === "REFUND";
+      return {
+        ...transaction,
+        signed_amount: transaction.signed_amount
+          ?? (positive ? transaction.amount : -transaction.amount),
+        uses: transaction.uses ?? Math.floor(transaction.amount / 10),
+      };
+    }),
+    credit_lots: data.credit_lots ?? [],
+  };
 }
 
 export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
@@ -171,8 +204,8 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
         setMessage(await readError(res));
         return;
       }
-      const data = await res.json();
-      setCreditCase(data);
+      const data = await res.json() as CreditCaseResponse;
+      setCreditCase(normalizeCreditCase(data));
     } catch {
       setCreditCase(null);
       setMessage("요청을 처리하지 못했습니다");
