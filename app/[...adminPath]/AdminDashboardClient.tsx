@@ -33,11 +33,26 @@ type Payment = {
 type CreditTransaction = {
   id: string;
   amount: number;
+  signed_amount: number;
+  uses: number;
   transaction_type: string;
   source_type: string | null;
   source_id: string | null;
   reason: string | null;
   created_at: string | null;
+};
+
+type CreditLot = {
+  id: string;
+  source_type: string | null;
+  source_id: string | null;
+  granted_amount: number;
+  granted_uses: number;
+  remaining_amount: number;
+  remaining_uses: number;
+  expires_at: string;
+  expired: boolean;
+  created_at: string;
 };
 
 type CreditCase = {
@@ -49,9 +64,11 @@ type CreditCase = {
     status: string;
     created_at: string | null;
     credit_balance: number;
+    credit_remaining_uses: number;
   };
   payments: Payment[];
   credit_transactions: CreditTransaction[];
+  credit_lots: CreditLot[];
 };
 
 type GrantForm = {
@@ -342,8 +359,11 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <dt className="text-white/35">현재 크레딧</dt>
+                    <dt className="text-white/35">사용 가능 크레딧</dt>
                     <dd className="mt-1 text-2xl font-black">{creditCase.user.credit_balance.toLocaleString()}</dd>
+                    <dd className="mt-1 text-xs text-white/45">
+                      합성 {creditCase.user.credit_remaining_uses.toLocaleString()}회
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-white/35">상태</dt>
@@ -384,6 +404,49 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
                   {granting ? "지급 중" : "크레딧 지급"}
                 </button>
               </div>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-[#111113] p-5">
+            <h2 className="text-lg font-bold">크레딧 지급분</h2>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[820px] text-left text-sm">
+                <thead className="text-xs text-white/35">
+                  <tr>
+                    <th className="py-2 pr-3">지급일</th>
+                    <th className="py-2 pr-3">source</th>
+                    <th className="py-2 pr-3">지급</th>
+                    <th className="py-2 pr-3">사용 가능</th>
+                    <th className="py-2 pr-3">만료일</th>
+                    <th className="py-2 pr-3">상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {creditCase.credit_lots.map((lot) => (
+                    <tr key={lot.id} className="border-t border-white/10">
+                      <td className="py-3 pr-3">{formatDate(lot.created_at)}</td>
+                      <td className="py-3 pr-3 font-mono text-xs text-white/60">
+                        {lot.source_type ?? "-"} {lot.source_id ? `/${lot.source_id}` : ""}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {lot.granted_amount.toLocaleString()} ({lot.granted_uses.toLocaleString()}회)
+                      </td>
+                      <td className="py-3 pr-3 font-bold">
+                        {lot.remaining_amount.toLocaleString()} ({lot.remaining_uses.toLocaleString()}회)
+                      </td>
+                      <td className="py-3 pr-3">{formatDate(lot.expires_at)}</td>
+                      <td className="py-3 pr-3">
+                        <span className={lot.expired ? "text-white/35" : "text-emerald-200"}>
+                          {lot.expired ? "만료" : "사용 가능"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {creditCase.credit_lots.length === 0 && (
+                <p className="py-8 text-center text-sm text-white/40">크레딧 지급분이 없습니다.</p>
+              )}
             </div>
           </section>
 
@@ -470,7 +533,10 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
                     <tr key={tx.id} className="border-t border-white/10">
                       <td className="py-3 pr-3">{formatDate(tx.created_at)}</td>
                       <td className="py-3 pr-3">{tx.transaction_type}</td>
-                      <td className="py-3 pr-3 font-bold">{tx.amount.toLocaleString()}</td>
+                      <td className={`py-3 pr-3 font-bold ${tx.signed_amount > 0 ? "text-emerald-200" : "text-white"}`}>
+                        {tx.signed_amount > 0 ? "+" : "−"}
+                        {Math.abs(tx.signed_amount).toLocaleString()} ({tx.uses.toLocaleString()}회)
+                      </td>
                       <td className="py-3 pr-3 font-mono text-xs text-white/60">
                         {tx.source_type ?? "-"} {tx.source_id ? `/${tx.source_id}` : ""}
                       </td>
