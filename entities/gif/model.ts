@@ -12,7 +12,7 @@ type GifSizes = {
 };
 
 export type Gif = {
-  id: string; // slug 사용
+  id: string;
   slug: string;
   title: string;
   file: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Gif } from "@/entities/gif/model";
 import { fetchSearchPage } from "@/shared/api/klipy";
 
@@ -20,6 +20,7 @@ export function useGifSearch(query: string): UseGifSearchResult {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const loadingMoreRef = useRef(false);
 
   useEffect(() => {
     if (!query) return;
@@ -45,20 +46,26 @@ export function useGifSearch(query: string): UseGifSearchResult {
   }, [query]);
 
   const loadMore = useCallback(() => {
-    if (!query || loading || loadingMore || !hasMore) return;
+    if (!query || loading || loadingMoreRef.current || !hasMore) return;
 
     const nextPage = page + 1;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     setError(false);
     fetchSearchPage(query, nextPage)
       .then((result) => {
-        setResults((prev) => [...prev, ...result.items]);
+        setResults((prev) => Array.from(
+          new Map([...prev, ...result.items].map((gif) => [gif.id, gif])).values()
+        ));
         setPage(result.currentPage);
         setHasMore(result.hasNext);
       })
       .catch(() => setError(true))
-      .finally(() => setLoadingMore(false));
-  }, [hasMore, loading, loadingMore, page, query]);
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  }, [hasMore, loading, page, query]);
 
   if (!query) {
     return {

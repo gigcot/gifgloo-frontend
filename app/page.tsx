@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/shared/ui/Header";
 import { TrendingShowcase } from "@/features/gif-search/ui/TrendingShowcase";
@@ -27,6 +27,7 @@ export default function Home() {
   const [trendingPage, setTrendingPage] = useState(1);
   const [trendingHasMore, setTrendingHasMore] = useState(false);
   const [trendingLoadingMore, setTrendingLoadingMore] = useState(false);
+  const trendingLoadingMoreRef = useRef(false);
 
   useEffect(() => {
     fetchTrendingPage(1, 24)
@@ -92,17 +93,23 @@ export default function Home() {
   }
 
   function loadMoreTrending() {
-    if (trendingLoadingMore || !trendingHasMore) return;
+    if (trendingLoadingMoreRef.current || !trendingHasMore) return;
 
+    trendingLoadingMoreRef.current = true;
     setTrendingLoadingMore(true);
     fetchTrendingPage(trendingPage + 1, 24)
       .then((result) => {
-        setTrendingGifs((prev) => [...prev, ...result.items]);
+        setTrendingGifs((prev) => Array.from(
+          new Map([...prev, ...result.items].map((gif) => [gif.id, gif])).values()
+        ));
         setTrendingPage(result.currentPage);
         setTrendingHasMore(result.hasNext);
       })
       .catch(() => setTrendingError(true))
-      .finally(() => setTrendingLoadingMore(false));
+      .finally(() => {
+        trendingLoadingMoreRef.current = false;
+        setTrendingLoadingMore(false);
+      });
   }
 
   return (

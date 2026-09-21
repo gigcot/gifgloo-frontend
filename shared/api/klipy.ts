@@ -54,7 +54,7 @@ export type GifPageResult = {
 
 function mapItem(item: KlipyItem): Gif {
   return {
-    id: item.slug,
+    id: String(item.id),
     slug: item.slug,
     title: item.title,
     file: item.file,
@@ -63,8 +63,10 @@ function mapItem(item: KlipyItem): Gif {
 }
 
 function mapPage(json: KlipyResponse): GifPageResult {
+  const items = json.data.data.map(mapItem);
+
   return {
-    items: json.data.data.map(mapItem),
+    items: Array.from(new Map(items.map((item) => [item.id, item])).values()),
     currentPage: json.data.current_page,
     hasNext: json.data.has_next,
   };
