@@ -82,8 +82,6 @@ function ConfirmModal({
 
 const FEATURED_RESULTS = [
   { src: "/punch_pepe_podo.mp4", alt: "반려동물 합성 결과 예시" },
-  { src: "/insung_hwang.mp4", alt: "합성 결과 예시 1" },
-  { src: "/punch_pepe_hwang.mp4", alt: "합성 결과 예시 2" },
 ];
 
 const HEADLINE_SUBJECTS = ["우리 집 반려동물을", "내 친구를", "나를"];
@@ -92,14 +90,13 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
   const allGifs = gifs.slice(0, 7);
   const gridGifs = gifs.slice(0, 4);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [featuredSlide, setFeaturedSlide] = useState(0);
   const [headlineSubjectIndex, setHeadlineSubjectIndex] = useState(0);
   const [headlineAnimating, setHeadlineAnimating] = useState(false);
   const [preview, setPreview] = useState<Gif | null>(null);
   const currentGif = allGifs.length > 0
     ? allGifs[currentSlide % allGifs.length]
     : null;
-  const currentFeatured = FEATURED_RESULTS[featuredSlide];
+  const currentFeatured = FEATURED_RESULTS[0];
 
   function handleLandingCta() {
     trackEvent("landing_cta_clicked", { location: "hero" });
@@ -113,13 +110,6 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
     }, 2500);
     return () => clearInterval(interval);
   }, [allGifs.length]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFeaturedSlide((prev) => (prev + 1) % FEATURED_RESULTS.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -268,7 +258,6 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
               <p className="text-xs font-semibold text-white/70">이렇게 만들 수 있어요</p>
               <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl" style={{ aspectRatio: "1/1" }}>
                 <video
-                  key={currentFeatured.src}
                   src={currentFeatured.src}
                   autoPlay
                   loop
@@ -278,17 +267,6 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
                   aria-label={currentFeatured.alt}
                   className="h-full w-full object-contain"
                 />
-                <div className="absolute bottom-3 right-3 flex gap-1">
-                  {FEATURED_RESULTS.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setFeaturedSlide(i)}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        i === featuredSlide ? "w-4 bg-white" : "w-1.5 bg-white/40"
-                      }`}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -327,7 +305,6 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
               <p className="text-xs font-semibold text-white/70">이렇게 만들 수 있어요</p>
               <div className="relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-black shadow-xl">
                 <video
-                  key={currentFeatured.src}
                   src={currentFeatured.src}
                   autoPlay
                   loop
@@ -337,17 +314,6 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
                   aria-label={currentFeatured.alt}
                   className="h-full w-full object-contain"
                 />
-                <div className="absolute bottom-3 right-3 flex gap-1">
-                  {FEATURED_RESULTS.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setFeaturedSlide(i)}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        i === featuredSlide ? "w-4 bg-white" : "w-1.5 bg-white/40"
-                      }`}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
           </div>
