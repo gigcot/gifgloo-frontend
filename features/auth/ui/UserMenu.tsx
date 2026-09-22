@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/shared/lib/use-auth";
 import { API_BASE } from "@/shared/lib/api-base";
 import { currentPathForPaymentReturn, setPaymentReturnIntent } from "@/shared/lib/payment-return";
+import { runAfterCompositionFeedback } from "@/shared/lib/composition-feedback-guard";
 
 const MENU_ITEMS = [
   { label: "홈", href: "/" },
@@ -39,7 +40,7 @@ export function UserMenu() {
   return (
     <div ref={containerRef} className="relative">
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => runAfterCompositionFeedback(() => setOpen((v) => !v))}
         className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-600 text-white transition-colors hover:bg-purple-700"
       >
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -16,6 +16,11 @@ import { GifSearchSheet } from "@/features/gif-search/ui/GifSearchSheet";
 import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
 import { fetchCreditBalance } from "@/features/credits/model/use-credits";
 import { CompositionFeedbackModal } from "@/features/compose/ui/CompositionFeedbackModal";
+import { submitCompositionFeedback } from "@/features/compose/model/composition-feedback-api";
+import {
+  listenForCompositionFeedbackGuard,
+  runAfterCompositionFeedback,
+} from "@/shared/lib/composition-feedback-guard";
 import { trackEvent } from "@/shared/lib/umami";
 import { isSupportedImageFile } from "@/features/compose/model/prepare-image-upload";
 
@@ -52,11 +57,14 @@ export function ComposePanel() {
   const [compositionWait, setCompositionWait] = useState<CompositionWait | null>(null);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const composingRef = useRef(false);
-  const feedbackPromptedJobRef = useRef<string | null>(null);
+  const pendingFeedbackActionRef = useRef<(() => void) | null>(null);
   const retrySourceRef = useRef<RetrySource | null>(null);
 
   const job = useCompositionJob(jobId);
@@ -135,15 +143,16 @@ export function ComposePanel() {
   }, [authFetch, usageSnapshot, visibleStage]);
 
   useEffect(() => {
-    if (!job.isComplete || !jobId || feedbackPromptedJobRef.current === jobId) return;
+    if (!job.isComplete || !jobId || feedbackSubmitted) return;
 
-    feedbackPromptedJobRef.current = jobId;
-    const timer = window.setTimeout(() => {
-      trackEvent("composition_feedback_opened");
+    return listenForCompositionFeedbackGuard((event) => {
+      event.preventDefault();
+      pendingFeedbackActionRef.current = event.detail.action;
+      setFeedbackError(null);
       setShowFeedback(true);
-    }, 800);
-    return () => window.clearTimeout(timer);
-  }, [job.isComplete, jobId]);
+      trackEvent("composition_feedback_opened");
+    });
+  }, [feedbackSubmitted, job.isComplete, jobId]);
 
   useEffect(() => {
     if (!compositionWait || compositionWait.initialSeconds === null) return;
@@ -254,7 +263,39 @@ export function ComposePanel() {
     setWaitSeconds(null);
     setJobId(null);
     setShowFeedback(false);
+    setFeedbackSubmitted(false);
+    setFeedbackSubmitting(false);
+    setFeedbackError(null);
+    pendingFeedbackActionRef.current = null;
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleFeedback(satisfied: boolean) {
+    if (!jobId || feedbackSubmitting || feedbackSubmitted) return;
+
+    setFeedbackSubmitting(true);
+    setFeedbackError(null);
+
+    try {
+      await submitCompositionFeedback(authFetch, jobId, satisfied);
+      trackEvent("composition_feedback_submitted", { satisfied });
+      setFeedbackSubmitted(true);
+      setShowFeedback(false);
+      const pendingAction = pendingFeedbackActionRef.current;
+      pendingFeedbackActionRef.current = null;
+      pendingAction?.();
+    } catch {
+      setFeedbackError("응답을 저장하지 못했어요. 다시 눌러주세요.");
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  }
+
+  function closeFeedbackModal() {
+    if (feedbackSubmitting) return;
+    trackEvent("composition_feedback_skipped");
+    pendingFeedbackActionRef.current = null;
+    setShowFeedback(false);
   }
 
   function goPurchaseFromCompose() {
@@ -569,6 +610,64 @@ export function ComposePanel() {
             <img src={job.resultUrl} alt="합성 결과" className="w-full object-contain" />
           </div>
 
+          <div className="w-full rounded-2xl border border-white/10 bg-[#111113] p-4">
+            <p className="text-center text-sm font-semibold text-white/75">
+              {feedbackSubmitted ? "평가해 주셔서 감사해요" : "결과물이 마음에 드나요?"}
+            </p>
+            {!feedbackSubmitted && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handleFeedback(false)}
+                  disabled={feedbackSubmitting}
+                  className="rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white disabled:opacity-40"
+                >
+                  아쉬워요
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleFeedback(true)}
+                  disabled={feedbackSubmitting}
+                  className="rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500 disabled:opacity-40"
+                >
+                  만족해요
+                </button>
+              </div>
+            )}
+            {feedbackError && (
+              <p role="alert" className="mt-3 text-center text-xs text-red-300">{feedbackError}</p>
+            )}
+          </div>
+
+          <div className="flex w-full flex-col gap-3">
+            <button
+              onClick={() => runAfterCompositionFeedback(() => {
+                if (!job.resultAssetId) return;
+                downloadGif(
+                  `${API_BASE}/assets/${job.resultAssetId}/download`,
+                  "composition_result",
+                );
+              })}
+              disabled={!job.resultAssetId}
+              className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500"
+            >
+              다운로드
+            </button>
+            <div className="flex gap-2">
+              <ShareButton
+                assetId={job.resultAssetId ?? undefined}
+                analyticsSource="composition_result"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
+              />
+              <button
+                onClick={() => runAfterCompositionFeedback(() => handleReset("completed"))}
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
+              >
+                다시 만들기
+              </button>
+            </div>
+          </div>
+
           {displayedUsesBefore !== null && (
             <div className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-[#111113] p-4 text-center">
               <div>
@@ -587,32 +686,6 @@ export function ComposePanel() {
               </div>
             </div>
           )}
-
-          <div className="flex w-full flex-col gap-3">
-            <button
-              onClick={() => job.resultAssetId && downloadGif(
-                `${API_BASE}/assets/${job.resultAssetId}/download`,
-                "composition_result",
-              )}
-              disabled={!job.resultAssetId}
-              className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500"
-            >
-              다운로드
-            </button>
-            <div className="flex gap-2">
-              <ShareButton
-                assetId={job.resultAssetId ?? undefined}
-                analyticsSource="composition_result"
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
-              />
-              <button
-                onClick={() => handleReset("completed")}
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
-              >
-                다시 만들기
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -650,10 +723,10 @@ export function ComposePanel() {
 
     {showFeedback && jobId && job.resultUrl && (
       <CompositionFeedbackModal
-        authFetch={authFetch}
-        compositionJobId={jobId}
-        resultUrl={job.resultUrl}
-        onClose={() => setShowFeedback(false)}
+        submitting={feedbackSubmitting}
+        error={feedbackError}
+        onSelect={(satisfied) => void handleFeedback(satisfied)}
+        onClose={closeFeedbackModal}
       />
     )}
     </>

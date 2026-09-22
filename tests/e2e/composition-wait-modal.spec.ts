@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const FRONTEND_ORIGIN = "http://127.0.0.1:3000";
+const FRONTEND_ORIGIN = "http://127.0.0.1:3100";
 const API_CORS_HEADERS = {
   "Access-Control-Allow-Credentials": "true",
   "Access-Control-Allow-Origin": FRONTEND_ORIGIN,
@@ -39,7 +39,21 @@ test("shows a countdown modal and retries composition when the wait ends", async
       body: JSON.stringify({ balance: 20, remaining_uses: 2, nearest_expires_at: null }),
     });
   });
-  await page.route("http://localhost:8000/compositions", async (route) => {
+  await page.route("http://localhost:8000/compositions/uploads", async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: API_CORS_HEADERS,
+      body: JSON.stringify({
+        upload_id: "wait-e2e-upload",
+        upload_url: "http://localhost:8000/test-upload",
+        headers: { "Content-Type": "image/png" },
+      }),
+    });
+  });
+  await page.route("http://localhost:8000/test-upload", async (route) => {
+    await route.fulfill({ status: 200 });
+  });
+  await page.route("http://localhost:8000/compositions/from-upload", async (route) => {
     compositionRequests += 1;
     if (compositionRequests === 1) {
       await route.fulfill({

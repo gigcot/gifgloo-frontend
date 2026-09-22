@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { runAfterCompositionFeedback } from "@/shared/lib/composition-feedback-guard";
 
 type HeaderProps = {
   title?: string;
@@ -9,12 +11,14 @@ type HeaderProps = {
 };
 
 export function Header({ title, showBack, action }: HeaderProps) {
+  const router = useRouter();
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0d0d0d]/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-screen-xl items-center gap-3 px-4 py-3">
         {showBack && (
           <button
-            onClick={() => window.history.back()}
+            onClick={() => runAfterCompositionFeedback(() => window.history.back())}
             className="rounded-full p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -25,6 +29,10 @@ export function Header({ title, showBack, action }: HeaderProps) {
 
         <Link
           href="/"
+          onClick={(event) => {
+            event.preventDefault();
+            runAfterCompositionFeedback(() => router.push("/"));
+          }}
           className="shrink-0 text-2xl font-black tracking-tight text-purple-400 transition-colors hover:text-purple-300"
         >
           gifgloo

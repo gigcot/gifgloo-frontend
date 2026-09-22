@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const API_CORS_HEADERS = {
   "Access-Control-Allow-Credentials": "true",
-  "Access-Control-Allow-Origin": "http://127.0.0.1:3000",
+  "Access-Control-Allow-Origin": "http://127.0.0.1:3100",
   "Content-Type": "application/json",
 };
 
