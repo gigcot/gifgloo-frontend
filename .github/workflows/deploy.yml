@@ -38,6 +38,12 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
   deploy:
     needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

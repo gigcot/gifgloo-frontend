@@ -21,8 +21,8 @@ async function openCompletedComposition(page: Page): Promise<RequestState> {
       slug: "feedback-e2e-gif",
       title: "Feedback E2E GIF",
       file: {
-        hd: { gif: { url: "/punch_pepe_hwang.gif", width: 320, height: 320, size: 1 } },
-        md: { gif: { url: "/punch_pepe_hwang.gif", width: 320, height: 320, size: 1 } },
+        hd: { gif: { url: "/icon.png", width: 320, height: 320, size: 1 } },
+        md: { gif: { url: "/icon.png", width: 320, height: 320, size: 1 } },
         sm: {},
         xs: {},
       },
