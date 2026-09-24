@@ -9,6 +9,7 @@ export function CallbackHandler() {
   useEffect(() => {
     if (searchParams.get("is_new_user") === "true") {
       sessionStorage.setItem("is_new_user", "true");
+      sessionStorage.setItem("analytics_signup_pending", "true");
     }
     router.replace("/");
   }, [router, searchParams]);

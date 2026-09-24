@@ -1,3 +1,5 @@
+import { getCampaignAttribution } from "./campaign-attribution";
+
 type UmamiEventData = Record<string, string | number | boolean>;
 type PendingEvent = { eventName: string; eventData?: UmamiEventData };
 
@@ -45,6 +47,7 @@ export function identifyUser(userId: string): void {
 }
 
 export function trackEvent(eventName: string, eventData?: UmamiEventData): void {
+  eventData = { ...eventData, ...getCampaignAttribution() };
   if (window.umami) {
     window.umami.track(eventName, eventData);
     return;
