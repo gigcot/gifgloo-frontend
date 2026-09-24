@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { Gif } from "@/entities/gif/model";
 import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from "@/features/auth/model/signup-consent";
 import { API_BASE } from "@/shared/lib/api-base";
+import { getCampaignAttribution } from "@/shared/lib/campaign-attribution";
 
 type LoginModalProps = {
   onClose: () => void;
@@ -25,6 +26,7 @@ export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
     setLoading(true);
     setError("");
     try {
+      const campaign = getCampaignAttribution();
       const response = await fetch(`${API_BASE}/oauth/${provider}/start`, {
         method: "POST",
         credentials: "include",
@@ -35,6 +37,12 @@ export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
           is_fourteen_or_older: isFourteenOrOlder,
           agreed_to_terms: agreedToTerms,
           agreed_to_privacy: agreedToPrivacy,
+          acquisition: campaign.utm_campaign ? {
+            source: campaign.utm_source,
+            medium: campaign.utm_medium,
+            campaign: campaign.utm_campaign,
+            content: campaign.utm_content,
+          } : undefined,
         }),
       });
       if (!response.ok) throw new Error("로그인을 시작하지 못했습니다. 다시 시도해주세요.");

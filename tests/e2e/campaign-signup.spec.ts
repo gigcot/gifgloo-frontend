@@ -61,3 +61,19 @@ test("returning login does not emit signup", async ({ page }) => {
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")))
     .toEqual([]);
 });
+
+test("passes preserved acquisition through social login start", async ({ page }) => {
+  await page.route("**/users/me", (route) => route.fulfill({ status: 401, json: {} }));
+  let body: Record<string, unknown> | undefined;
+  await page.route("**/oauth/google/start", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ json: { authorization_url: "http://127.0.0.1:3100/callback" } });
+  });
+  await page.goto("/?utm_source=friend&utm_medium=referral&utm_campaign=exp001&utm_content=message_a");
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  for (const checkbox of await page.getByRole("checkbox").all()) await checkbox.check();
+  await page.getByRole("button", { name: "구글로 계속하기" }).click();
+  await expect.poll(() => body?.acquisition).toEqual({
+    source: "friend", medium: "referral", campaign: "exp001", content: "message_a",
+  });
+});

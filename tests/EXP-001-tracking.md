@@ -18,7 +18,7 @@ These are **custom event properties**, not rewritten page URLs or native UTM fie
 
 `signup_completed` is a browser-observed signup signal, not authoritative account creation. It requires the existing `is_new_user=true` callback signal and authenticated user ID. Deduplication is per account per tab session. It does not grant credit. Actual signup counts must be checked against backend records.
 
-This does not persist campaign membership across tabs, devices, or browser restarts. It does not provide durable experiment/account membership, server-side conversion tracking, or exact-once delivery. Existing tracker timeout/ad-blocking may drop events, including a signup already marked as queued. Credit consumption, refunds, expirations, test payments, and repeat composition still need backend-based analysis.
+Browser event attribution does not persist across tabs, devices, or browser restarts. LoginModal also sends the preserved acquisition to OAuth start; the backend stores it on newly created users only. That durable signup attribution supports subsequent account-based analysis, but does not automatically populate Umami's campaign fields on other devices. Existing tracker timeout/ad-blocking may drop events, including a signup already marked as queued. Credit consumption, refunds, expirations, test payments, and repeat composition still need backend-based analysis.
 
 ## Verification
 
