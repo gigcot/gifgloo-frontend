@@ -24,10 +24,10 @@ export function CreditsBadge() {
   return (
     <div className="text-right">
       <p className="text-sm font-bold text-white sm:text-base">
-        합성 {state.remainingUses.toLocaleString()}회
+        남은 이용권 {state.remainingUses.toLocaleString()}회
       </p>
       {expiration && (
-        <p className="hidden text-[11px] text-white/40 sm:block">가장 빠른 만료 {expiration}</p>
+        <p className="text-[10px] text-white/40 sm:text-[11px]">첫 만료 {expiration} (한국 시간)</p>
       )}
     </div>
   );
