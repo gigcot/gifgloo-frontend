@@ -75,8 +75,6 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   await surveyCta.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
-  await dialog.getByRole("button", { name: "설문 시작" }).click();
-  await expect(dialog.getByText("EXP-001", { exact: true })).toHaveCount(0);
   const dialogBox = await dialog.boundingBox();
   const viewport = page.viewportSize();
   expect(dialogBox).not.toBeNull();
@@ -84,12 +82,19 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
   expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(viewport!.height);
   expect(Math.abs(dialogBox!.y + dialogBox!.height / 2 - viewport!.height / 2)).toBeLessThan(2);
+  await dialog.getByRole("button", { name: "설문 시작" }).click();
+  await expect(dialog.getByText("EXP-001", { exact: true })).toHaveCount(0);
   await dialog.getByLabel("단체 채팅방", { exact: true }).check();
   await dialog.getByLabel("기기에 저장했다").check();
   await expect(dialog.getByRole("group", { name: /사용하지 않은 가장 큰 이유/ })).toBeVisible();
+  const submitButton = dialog.getByRole("button", { name: "제출하고 이용권 1회 받기" });
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
+  await page.mouse.move(10, 200);
+  await page.mouse.wheel(0, 10_000);
+  await expect(submitButton).toBeInViewport();
   await dialog.getByLabel("개인 소장만 하려고 했다").check();
   await dialog.getByPlaceholder("예: 친구 단톡방에서 반응 짤로").fill("친구 단톡방");
-  await dialog.getByRole("button", { name: "제출하고 이용권 1회 받기" }).click();
+  await submitButton.click();
 
   await expect(dialog.getByText("이용권 1회가 지급됐어요")).toBeVisible();
   await expect(header.getByRole("button", { name: "이용권 받기", exact: true })).toHaveCount(0);

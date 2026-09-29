@@ -83,6 +83,15 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
     if (open) trackEvent("exp001_survey_opened");
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const hasExternalAction = actualActions.some((action) => EXTERNAL_ACTIONS.has(action));
@@ -148,16 +157,17 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] overflow-y-auto overscroll-contain bg-black/70 backdrop-blur-sm"
       onClick={close}
     >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="exp001-survey-title"
-        className="max-h-full w-full max-w-lg overflow-y-auto rounded-3xl border border-white/10 bg-[#151217] p-6 shadow-2xl sm:p-8"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="flex min-h-full items-center justify-center px-4 py-8">
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exp001-survey-title"
+          className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#151217] p-6 shadow-2xl sm:p-8"
+          onClick={(event) => event.stopPropagation()}
+        >
         {step === "intro" && (
           <div className="flex flex-col items-center text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/15 text-2xl">
@@ -357,7 +367,8 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
             </button>
           </div>
         )}
-      </section>
+        </section>
+      </div>
     </div>,
     document.body,
   );
