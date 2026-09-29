@@ -59,6 +59,9 @@ function formatPrice(amount: number, currency: string) {
 }
 
 function transactionLabel(item: CreditTransactionHistoryItem) {
+  if (item.transaction_type === "CHARGE" && item.source_type === "EXPERIMENT") {
+    return "설문 참여 보상";
+  }
   if (item.transaction_type === "CHARGE") return "이용권 구매";
   if (item.transaction_type === "DEDUCT") return "GIF 합성 사용";
   return "합성 실패 이용권 복구";
@@ -111,7 +114,7 @@ function TransactionRow({ item }: { item: CreditTransactionHistoryItem }) {
         <p className="truncate text-sm font-semibold text-white/85">{transactionLabel(item)}</p>
         <p className="mt-1 text-xs text-white/35">
           {formatDateTime(item.created_at)}
-          {item.reason ? ` · ${item.reason}` : ""}
+          {item.reason && item.source_type !== "EXPERIMENT" ? ` · ${item.reason}` : ""}
         </p>
       </div>
       <div className="shrink-0 text-right">

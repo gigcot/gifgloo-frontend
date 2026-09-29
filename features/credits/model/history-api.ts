@@ -23,7 +23,7 @@ export type CreditTransactionHistoryItem = {
   transaction_type: "CHARGE" | "DEDUCT" | "REFUND";
   signed_amount: number;
   uses: number;
-  source_type: "PAYMENT" | "ADMIN" | "COMPOSITION" | "LOT" | null;
+  source_type: "PAYMENT" | "ADMIN" | "COMPOSITION" | "LOT" | "EXPERIMENT" | null;
   source_id: string | null;
   credit_lot_id: string | null;
   reason: string | null;
