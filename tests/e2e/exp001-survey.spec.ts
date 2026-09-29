@@ -89,9 +89,16 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   await expect(dialog.getByRole("group", { name: /사용하지 않은 가장 큰 이유/ })).toBeVisible();
   const submitButton = dialog.getByRole("button", { name: "제출하고 이용권 1회 받기" });
   expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
-  await page.mouse.move(10, 200);
-  await page.mouse.wheel(0, 10_000);
   await expect(submitButton).toBeInViewport();
+  const surveyScroll = page.getByTestId("exp001-survey-scroll");
+  const surveyScrollBox = await surveyScroll.boundingBox();
+  expect(surveyScrollBox).not.toBeNull();
+  await page.mouse.move(
+    surveyScrollBox!.x + surveyScrollBox!.width / 2,
+    surveyScrollBox!.y + surveyScrollBox!.height / 2,
+  );
+  await page.mouse.wheel(0, 10_000);
+  await expect(dialog.getByPlaceholder("예: 친구 단톡방에서 반응 짤로")).toBeInViewport();
   await dialog.getByLabel("개인 소장만 하려고 했다").check();
   await dialog.getByPlaceholder("예: 친구 단톡방에서 반응 짤로").fill("친구 단톡방");
   await submitButton.click();

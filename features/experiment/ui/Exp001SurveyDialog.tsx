@@ -157,19 +157,18 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[70] overflow-y-auto overscroll-contain bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex items-center justify-center overscroll-contain bg-black/70 px-4 py-8 backdrop-blur-sm"
       onClick={close}
     >
-      <div className="flex min-h-full items-center justify-center px-4 py-8">
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="exp001-survey-title"
-          className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#151217] p-6 shadow-2xl sm:p-8"
-          onClick={(event) => event.stopPropagation()}
-        >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exp001-survey-title"
+        className="flex max-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#151217] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         {step === "intro" && (
-          <div className="flex flex-col items-center text-center">
+          <div className="flex flex-col items-center p-6 text-center sm:p-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/15 text-2xl">
               🎁
             </div>
@@ -204,7 +203,11 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
         )}
 
         {step === "survey" && (
-          <div>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div
+              data-testid="exp001-survey-scroll"
+              className="min-h-0 flex-1 overflow-y-auto p-6 sm:p-8"
+            >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="exp001-survey-title" className="text-xl font-bold text-white">
@@ -335,20 +338,23 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
               />
             </label>
 
-            {error && <p role="alert" className="mt-4 text-sm text-red-300">{error}</p>}
+              {error && <p role="alert" className="mt-4 text-sm text-red-300">{error}</p>}
+            </div>
+            <div className="shrink-0 border-t border-white/10 bg-[#151217] px-6 py-4 sm:px-8">
             <button
               type="button"
               onClick={() => void submit()}
               disabled={!canSubmit || submitting}
-              className="mt-6 w-full rounded-full bg-purple-600 py-3.5 text-sm font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-35"
+              className="w-full rounded-full bg-purple-600 py-3.5 text-sm font-bold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-35"
             >
               {submitting ? "제출 중..." : "제출하고 이용권 1회 받기"}
             </button>
+            </div>
           </div>
         )}
 
         {step === "success" && (
-          <div className="flex flex-col items-center text-center">
+          <div className="flex flex-col items-center p-6 text-center sm:p-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
               ✓
             </div>
@@ -367,8 +373,7 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
             </button>
           </div>
         )}
-        </section>
-      </div>
+      </section>
     </div>,
     document.body,
   );
