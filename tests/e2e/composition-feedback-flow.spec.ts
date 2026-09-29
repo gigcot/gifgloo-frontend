@@ -10,10 +10,18 @@ const API_CORS_HEADERS = {
 type RequestState = {
   feedback: boolean[];
   shareRequests: number;
+  surveyStatusRequests: number;
 };
 
-async function openCompletedComposition(page: Page): Promise<RequestState> {
-  const state: RequestState = { feedback: [], shareRequests: 0 };
+async function openCompletedComposition(
+  page: Page,
+  surveyEligibleAfterCompletion = false,
+): Promise<RequestState> {
+  const state: RequestState = {
+    feedback: [],
+    shareRequests: 0,
+    surveyStatusRequests: 0,
+  };
 
   await page.addInitScript(() => {
     localStorage.setItem("compose_gif", JSON.stringify({
@@ -41,6 +49,17 @@ async function openCompletedComposition(page: Page): Promise<RequestState> {
     headers: API_CORS_HEADERS,
     body: JSON.stringify({ balance: 1_000, remaining_uses: 100, nearest_expires_at: null }),
   }));
+  await page.route("http://localhost:8000/experiments/exp-001/survey", (route) => {
+    state.surveyStatusRequests += 1;
+    return route.fulfill({
+      status: 200,
+      headers: API_CORS_HEADERS,
+      body: JSON.stringify({
+        eligible: surveyEligibleAfterCompletion && state.surveyStatusRequests > 1,
+        submitted: false,
+      }),
+    });
+  });
   await page.route("http://localhost:8000/compositions/uploads", (route) => route.fulfill({
     status: 200,
     headers: API_CORS_HEADERS,
@@ -156,4 +175,25 @@ test("resumes home navigation after feedback", async ({ page }) => {
 
   await expect.poll(() => state.feedback).toEqual([true]);
   await expect(page).toHaveURL("/");
+});
+
+test("shows the non-blocking survey reminder once when starting another composition", async ({ page }) => {
+  const state = await openCompletedComposition(page, true);
+
+  await page.getByRole("button", { name: "다시 만들기" }).click();
+  const feedbackDialog = page.getByRole("dialog");
+  await expect(feedbackDialog).toBeVisible();
+  await feedbackDialog.getByRole("button", { name: "만족해요" }).click();
+
+  const reminder = page.getByRole("status");
+  await expect(reminder.getByText("방금 만든 GIF를 어떻게 사용했는지 알려주세요")).toBeVisible();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeVisible();
+  await reminder.getByRole("button", { name: "설문 참여하기" }).click();
+  await expect(page.getByRole("dialog").getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
+  expect(state.surveyStatusRequests).toBeGreaterThan(1);
+
+  await page.getByRole("button", { name: "나중에" }).click();
+  await expect(reminder).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("status")).toHaveCount(0);
 });

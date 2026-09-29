@@ -23,6 +23,11 @@ import {
 } from "@/shared/lib/composition-feedback-guard";
 import { trackEvent } from "@/shared/lib/umami";
 import { isSupportedImageFile } from "@/features/compose/model/prepare-image-upload";
+import {
+  refreshExp001SurveyStatus,
+  useExp001SurveyStatus,
+} from "@/features/experiment/model/exp-001-survey";
+import { requestExp001SurveyOpen } from "@/features/experiment/model/exp-001-survey-open";
 
 type Stage = "ready" | "processing" | "done" | "error";
 type RetrySource = "completed" | "failed";
@@ -40,7 +45,8 @@ type CompositionWait = {
 
 export function ComposePanel() {
   const router = useRouter();
-  const { authFetch } = useAuth();
+  const { authFetch, userId } = useAuth();
+  const survey = useExp001SurveyStatus();
 
   const [stage, setStage] = useState<Stage>("ready");
   const [gif, setGif] = useState<Gif | null>(null);
@@ -60,12 +66,15 @@ export function ComposePanel() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [showSurveyReminder, setShowSurveyReminder] = useState(false);
+  const [evaluateSurveyReminder, setEvaluateSurveyReminder] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const composingRef = useRef(false);
   const pendingFeedbackActionRef = useRef<(() => void) | null>(null);
   const retrySourceRef = useRef<RetrySource | null>(null);
+  const refreshedSurveyJobRef = useRef<string | null>(null);
 
   const job = useCompositionJob(jobId);
 
@@ -153,6 +162,39 @@ export function ComposePanel() {
       trackEvent("composition_feedback_opened");
     });
   }, [feedbackSubmitted, job.isComplete, jobId]);
+
+  useEffect(() => {
+    if (
+      !job.isComplete ||
+      !jobId ||
+      !userId ||
+      refreshedSurveyJobRef.current === jobId
+    ) {
+      return;
+    }
+    refreshedSurveyJobRef.current = jobId;
+    void refreshExp001SurveyStatus(authFetch, userId);
+  }, [authFetch, job.isComplete, jobId, userId]);
+
+  useEffect(() => {
+    if (!evaluateSurveyReminder || !userId) return;
+    if (survey.status === "idle" || survey.status === "loading") return;
+
+    setEvaluateSurveyReminder(false);
+    if (survey.status !== "done" || !survey.eligible || survey.submitted) return;
+
+    const reminderKey = `exp001_survey_reminder_seen:${userId}`;
+    if (localStorage.getItem(reminderKey)) return;
+    localStorage.setItem(reminderKey, "true");
+    setShowSurveyReminder(true);
+    trackEvent("exp001_survey_reminder_shown");
+  }, [evaluateSurveyReminder, survey, userId]);
+
+  useEffect(() => {
+    if (survey.status === "done" && survey.submitted) {
+      setShowSurveyReminder(false);
+    }
+  }, [survey]);
 
   useEffect(() => {
     if (!compositionWait || compositionWait.initialSeconds === null) return;
@@ -252,6 +294,10 @@ export function ComposePanel() {
         : "composition_retry_clicked",
     );
     retrySourceRef.current = source;
+    if (source === "completed" && userId) {
+      setEvaluateSurveyReminder(true);
+      void refreshExp001SurveyStatus(authFetch, userId);
+    }
     composingRef.current = false;
     clearPhoto();
     setStage("ready");
@@ -316,6 +362,40 @@ export function ComposePanel() {
       {/* ── 준비 상태 ── */}
       {visibleStage === "ready" && (
         <div className="mx-auto flex max-w-3xl flex-col gap-5">
+          {showSurveyReminder && (
+            <div
+              role="status"
+              className="flex flex-col gap-3 rounded-2xl border border-purple-400/25 bg-purple-500/10 p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <p className="text-sm font-bold text-purple-100">
+                  방금 만든 GIF를 어떻게 사용했는지 알려주세요
+                </p>
+                <p className="mt-1 text-xs leading-5 text-white/45">
+                  짧은 설문에 답하면 7일 동안 쓸 수 있는 이용권 1회를 드려요.
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSurveyReminder(false)}
+                  className="rounded-full px-3 py-2 text-xs font-semibold text-white/45 hover:text-white"
+                >
+                  닫기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSurveyReminder(false);
+                    requestExp001SurveyOpen();
+                  }}
+                  className="rounded-full bg-purple-600 px-4 py-2 text-xs font-bold text-white hover:bg-purple-500"
+                >
+                  설문 참여하기
+                </button>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-[1fr_auto_1fr] gap-3 rounded-3xl border border-white/10 bg-[#111113] p-3 shadow-2xl sm:p-4">
             {/* 선택한 GIF */}
             <div className="flex flex-1 flex-col gap-1.5">
