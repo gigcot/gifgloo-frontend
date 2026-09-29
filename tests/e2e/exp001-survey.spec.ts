@@ -76,6 +76,13 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
   await dialog.getByRole("button", { name: "설문 시작" }).click();
+  const dialogBox = await dialog.boundingBox();
+  const viewport = page.viewportSize();
+  expect(dialogBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
+  expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(viewport!.height);
+  expect(Math.abs(dialogBox!.y + dialogBox!.height / 2 - viewport!.height / 2)).toBeLessThan(2);
   await dialog.getByLabel("단체 채팅방", { exact: true }).check();
   await dialog.getByLabel("기기에 저장했다").check();
   await expect(dialog.getByRole("group", { name: /사용하지 않은 가장 큰 이유/ })).toBeVisible();

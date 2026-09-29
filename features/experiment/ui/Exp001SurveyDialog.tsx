@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { requestCreditBalanceRefresh } from "@/features/credits/model/use-credits";
 import {
   type ActualAction,
@@ -145,7 +146,7 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-sm"
       onClick={close}
@@ -358,6 +359,7 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
           </div>
         )}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
