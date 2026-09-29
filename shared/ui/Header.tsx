@@ -15,7 +15,7 @@ export function Header({ title, showBack, action }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0d0d0d]/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-screen-xl items-center gap-3 px-4 py-3">
+      <div className="mx-auto flex max-w-screen-xl flex-wrap items-center gap-3 px-4 py-3">
         {showBack && (
           <button
             onClick={() => runAfterCompositionFeedback(() => window.history.back())}
@@ -47,7 +47,7 @@ export function Header({ title, showBack, action }: HeaderProps) {
           </>
         )}
 
-        {action && <div className="ml-auto">{action}</div>}
+        {action && <div className="contents">{action}</div>}
       </div>
     </header>
   );

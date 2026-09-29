@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useAuth } from "@/shared/lib/use-auth";
 import { API_BASE } from "@/shared/lib/api-base";
 
@@ -16,6 +16,19 @@ export type PassBalance = {
 };
 
 type AuthFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+let refreshVersion = 0;
+const refreshListeners = new Set<() => void>();
+
+function subscribeToRefresh(listener: () => void): () => void {
+  refreshListeners.add(listener);
+  return () => refreshListeners.delete(listener);
+}
+
+export function requestCreditBalanceRefresh(): void {
+  refreshVersion += 1;
+  for (const listener of refreshListeners) listener();
+}
 
 export async function fetchCreditBalance(authFetch: AuthFetch): Promise<PassBalance> {
   const response = await authFetch(`${API_BASE}/credits/balance`);
@@ -44,13 +57,18 @@ export async function fetchCreditBalance(authFetch: AuthFetch): Promise<PassBala
 
 export function useCredits(): State {
   const { authFetch } = useAuth();
+  const version = useSyncExternalStore(
+    subscribeToRefresh,
+    () => refreshVersion,
+    () => 0,
+  );
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
     fetchCreditBalance(authFetch)
       .then((balance) => setState({ status: "done", ...balance }))
       .catch(() => setState({ status: "error" }));
-  }, [authFetch]);
+  }, [authFetch, version]);
 
   return state;
 }

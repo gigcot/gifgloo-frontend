@@ -1,10 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAuth } from "@/shared/lib/use-auth";
 import { CreditsBadge } from "@/features/credits/ui/CreditsBadge";
 import { UserMenu } from "@/features/auth/ui/UserMenu";
+import { Exp001SurveyDialog } from "@/features/experiment/ui/Exp001SurveyDialog";
+import { useExp001SurveyStatus } from "@/features/experiment/model/exp-001-survey";
+import { listenForExp001SurveyOpen } from "@/features/experiment/model/exp-001-survey-open";
 import Link from "next/link";
 import { currentPathForPaymentReturn, setPaymentReturnIntent } from "@/shared/lib/payment-return";
+import { trackEvent } from "@/shared/lib/umami";
 
 type Props = {
   onLogin?: () => void;
@@ -12,27 +17,69 @@ type Props = {
 
 export function HeaderActions({ onLogin }: Props) {
   const { isLoggedIn, checked } = useAuth();
+  const survey = useExp001SurveyStatus();
+  const [showSurvey, setShowSurvey] = useState(false);
+
+  const showSurveyCta =
+    survey.status === "done" && survey.eligible && !survey.submitted;
+
+  useEffect(() => {
+    return listenForExp001SurveyOpen(() => {
+      if (showSurveyCta) setShowSurvey(true);
+    });
+  }, [showSurveyCta]);
+
+  function openSurvey() {
+    trackEvent("exp001_survey_cta_clicked");
+    setShowSurvey(true);
+  }
 
   if (!checked) return null;
 
   if (isLoggedIn) {
     return (
-      <div className="flex items-center gap-3">
-        <CreditsBadge />
-        <Link
-          href="/payment/charge"
-          onClick={() => {
-            setPaymentReturnIntent({
-              href: currentPathForPaymentReturn(),
-              label: "이전 화면으로 계속하기",
-            });
-          }}
-          className="hidden rounded-full border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-sm font-bold text-purple-100 transition-colors hover:bg-purple-500/20 sm:block"
-        >
-          구매
-        </Link>
-        <UserMenu />
-      </div>
+      <>
+        <div className="ml-auto flex items-center gap-3">
+          <CreditsBadge />
+          {showSurveyCta && (
+            <button
+              type="button"
+              onClick={openSurvey}
+              className="hidden rounded-full bg-purple-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-purple-500 sm:block"
+            >
+              이용권 받기
+            </button>
+          )}
+          <Link
+            href="/payment/charge"
+            onClick={() => {
+              setPaymentReturnIntent({
+                href: currentPathForPaymentReturn(),
+                label: "이전 화면으로 계속하기",
+              });
+            }}
+            className="hidden rounded-full border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-sm font-bold text-purple-100 transition-colors hover:bg-purple-500/20 sm:block"
+          >
+            구매
+          </Link>
+          <UserMenu />
+        </div>
+        {showSurveyCta && (
+          <div className="order-last basis-full sm:hidden">
+            <button
+              type="button"
+              onClick={openSurvey}
+              className="w-full rounded-full bg-purple-600 py-2.5 text-sm font-bold text-white transition-colors hover:bg-purple-500"
+            >
+              이용권 받기
+            </button>
+          </div>
+        )}
+        <Exp001SurveyDialog
+          open={showSurvey}
+          onClose={() => setShowSurvey(false)}
+        />
+      </>
     );
   }
 
@@ -40,7 +87,7 @@ export function HeaderActions({ onLogin }: Props) {
     return (
       <button
         onClick={onLogin}
-        className="rounded-full bg-purple-600 px-5 py-2 text-base font-semibold text-white transition-colors hover:bg-purple-700"
+        className="ml-auto rounded-full bg-purple-600 px-5 py-2 text-base font-semibold text-white transition-colors hover:bg-purple-700"
       >
         로그인
       </button>
