@@ -76,6 +76,7 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
   await dialog.getByRole("button", { name: "설문 시작" }).click();
+  await expect(dialog.getByText("EXP-001", { exact: true })).toHaveCount(0);
   const dialogBox = await dialog.boundingBox();
   const viewport = page.viewportSize();
   expect(dialogBox).not.toBeNull();

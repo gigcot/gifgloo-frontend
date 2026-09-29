@@ -197,8 +197,7 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
           <div>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-purple-300">EXP-001</p>
-                <h2 id="exp001-survey-title" className="mt-2 text-xl font-bold text-white">
+                <h2 id="exp001-survey-title" className="text-xl font-bold text-white">
                   완성된 GIF 사용 경험
                 </h2>
               </div>
