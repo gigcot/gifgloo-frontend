@@ -86,7 +86,7 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   await expect(dialog.getByText("EXP-001", { exact: true })).toHaveCount(0);
   await dialog.getByLabel("단체 채팅방", { exact: true }).check();
   await dialog.getByLabel("기기에 저장했다").check();
-  await expect(dialog.getByRole("group", { name: /사용하지 않은 가장 큰 이유/ })).toBeVisible();
+  await expect(dialog.getByRole("group", { name: /사용하지 않은 이유를 모두/ })).toBeVisible();
   const submitButton = dialog.getByRole("button", { name: "제출하고 이용권 1회 받기" });
   expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
   await expect(submitButton).toBeInViewport();
@@ -99,7 +99,11 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   );
   await page.mouse.wheel(0, 10_000);
   await expect(dialog.getByPlaceholder("예: 친구 단톡방에서 반응 짤로")).toBeInViewport();
+  await expect(submitButton).toBeDisabled();
   await dialog.getByLabel("개인 소장만 하려고 했다").check();
+  await dialog.getByLabel("초상권·저작권이 걱정됐다").check();
+  await expect(dialog.getByLabel("개인 소장만 하려고 했다")).toBeChecked();
+  await expect(dialog.getByLabel("초상권·저작권이 걱정됐다")).toBeChecked();
   await dialog.getByPlaceholder("예: 친구 단톡방에서 반응 짤로").fill("친구 단톡방");
   await submitButton.click();
 
@@ -110,7 +114,7 @@ test("eligible user submits the survey and receives refreshed credit balance", a
     {
       intended_context: "group_chat",
       actual_actions: ["saved"],
-      non_external_use_reason: "personal_keep",
+      non_external_use_reasons: ["personal_keep", "rights_concern"],
       next_context: "친구 단톡방",
     },
   ]);
@@ -124,6 +128,39 @@ test("eligible user submits the survey and receives refreshed credit balance", a
     "exp001_survey_submitted",
   ]));
   expect(JSON.stringify(events)).not.toContain("personal_keep");
+});
+
+test("reason selections toggle, require other text, and are omitted after external use", async ({ page }) => {
+  const state = await setupSurvey(page);
+  await page.goto("/");
+  await page.locator("header").getByRole("button", { name: "이용권 받기", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "설문 시작" }).click();
+  await dialog.getByLabel("그냥 궁금해서", { exact: true }).check();
+  await dialog.getByLabel("결과만 확인했다", { exact: true }).check();
+  const reasons = dialog.getByRole("group", { name: /사용하지 않은 이유를 모두/ });
+  const other = reasons.getByLabel("기타", { exact: true });
+  const submit = dialog.getByRole("button", { name: "제출하고 이용권 1회 받기" });
+  await reasons.getByLabel("쓸 만한 상황이 없었다").check();
+  await other.check();
+  await expect(submit).toBeDisabled();
+  await reasons.getByPlaceholder("그 밖의 이유를 적어주세요").fill("기타 사유");
+  await expect(submit).toBeEnabled();
+  await other.uncheck();
+  await reasons.getByLabel("쓸 만한 상황이 없었다").uncheck();
+  await expect(submit).toBeDisabled();
+  await other.check();
+  await reasons.getByPlaceholder("그 밖의 이유를 적어주세요").clear();
+  await expect(submit).toBeDisabled();
+  await dialog.getByLabel("단체 채팅방에 보냈다", { exact: true }).check();
+  await expect(reasons).toHaveCount(0);
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(dialog.getByText("이용권 1회가 지급됐어요")).toBeVisible();
+  expect(state.submissions).toEqual([{
+    intended_context: "curiosity",
+    actual_actions: ["group_chat"],
+  }]);
 });
 
 test("eligible mobile user sees the CTA as a second row inside the sticky header", async ({ page }) => {

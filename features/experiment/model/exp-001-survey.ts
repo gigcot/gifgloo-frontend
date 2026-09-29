@@ -52,7 +52,7 @@ export type Exp001SurveyAnswers = {
   actual_actions: ActualAction[];
   intended_context_other?: string;
   actual_action_other?: string;
-  non_external_use_reason?: NonExternalUseReason;
+  non_external_use_reasons?: NonExternalUseReason[];
   non_external_use_reason_other?: string;
   next_context?: string;
 };

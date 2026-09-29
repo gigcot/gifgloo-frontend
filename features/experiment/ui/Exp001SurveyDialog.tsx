@@ -73,7 +73,7 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
   const [intendedContextOther, setIntendedContextOther] = useState("");
   const [actualActions, setActualActions] = useState<ActualAction[]>([]);
   const [actualActionOther, setActualActionOther] = useState("");
-  const [nonExternalReason, setNonExternalReason] = useState<NonExternalUseReason | null>(null);
+  const [nonExternalReasons, setNonExternalReasons] = useState<NonExternalUseReason[]>([]);
   const [nonExternalReasonOther, setNonExternalReasonOther] = useState("");
   const [nextContext, setNextContext] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -99,10 +99,10 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
   const canSubmit =
     intendedContext !== null &&
     actualActions.length > 0 &&
-    (!needsNonExternalReason || nonExternalReason !== null) &&
+    (!needsNonExternalReason || nonExternalReasons.length > 0) &&
     (intendedContext !== "other" || trimmed(intendedContextOther) !== undefined) &&
     (!actualActions.includes("other") || trimmed(actualActionOther) !== undefined) &&
-    (nonExternalReason !== "other" || trimmed(nonExternalReasonOther) !== undefined);
+    (!needsNonExternalReason || !nonExternalReasons.includes("other") || trimmed(nonExternalReasonOther) !== undefined);
 
   function close() {
     if (submitting) return;
@@ -137,10 +137,10 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
         ...(actualActions.includes("other")
           ? { actual_action_other: trimmed(actualActionOther) }
           : {}),
-        ...(needsNonExternalReason && nonExternalReason
-          ? { non_external_use_reason: nonExternalReason }
+        ...(needsNonExternalReason
+          ? { non_external_use_reasons: nonExternalReasons }
           : {}),
-        ...(needsNonExternalReason && nonExternalReason === "other"
+        ...(needsNonExternalReason && nonExternalReasons.includes("other")
           ? { non_external_use_reason_other: trimmed(nonExternalReasonOther) }
           : {}),
         ...(trimmed(nextContext) ? { next_context: trimmed(nextContext) } : {}),
@@ -293,8 +293,9 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
             {needsNonExternalReason && (
               <fieldset className="mt-7">
                 <legend className="text-sm font-bold text-white">
-                  3. 채팅·게시글·링크 공유로 사용하지 않은 가장 큰 이유는 무엇인가요?
+                  3. 채팅·게시글·링크 공유로 사용하지 않은 이유를 모두 골라주세요.
                 </legend>
+                <p className="mt-1 text-xs text-white/40">여러 개 선택할 수 있어요.</p>
                 <div className="mt-3 grid grid-cols-1 gap-2">
                   {NON_EXTERNAL_REASONS.map((option) => (
                     <label
@@ -302,23 +303,27 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
                       className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-sm text-white/70 has-checked:border-purple-400/60 has-checked:bg-purple-500/10 has-checked:text-purple-100"
                     >
                       <input
-                        type="radio"
+                        type="checkbox"
                         name="non-external-reason"
                         value={option.value}
-                        checked={nonExternalReason === option.value}
-                        onChange={() => setNonExternalReason(option.value)}
+                        checked={nonExternalReasons.includes(option.value)}
+                        onChange={() => setNonExternalReasons((current) =>
+                          current.includes(option.value)
+                            ? current.filter((reason) => reason !== option.value)
+                            : [...current, option.value],
+                        )}
                         className="accent-purple-500"
                       />
                       {option.label}
                     </label>
                   ))}
                 </div>
-                {nonExternalReason === "other" && (
+                {nonExternalReasons.includes("other") && (
                   <input
                     value={nonExternalReasonOther}
                     onChange={(event) => setNonExternalReasonOther(event.target.value)}
                     maxLength={500}
-                    placeholder="가장 큰 이유를 적어주세요"
+                    placeholder="그 밖의 이유를 적어주세요"
                     className="mt-3 w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-purple-400/60"
                   />
                 )}
