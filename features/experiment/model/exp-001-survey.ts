@@ -62,6 +62,7 @@ const INITIAL_STATE: SurveyStatus = { status: "idle", userId: null };
 let state: SurveyStatus = INITIAL_STATE;
 let request: Promise<void> | null = null;
 let requestUserId: string | null = null;
+let requestVersion = 0;
 const listeners = new Set<() => void>();
 
 function emit(next: SurveyStatus) {
@@ -98,25 +99,26 @@ async function loadStatus(
   force: boolean,
 ): Promise<void> {
   if (!force && state.status === "done" && state.userId === userId) return;
-  if (request && requestUserId === userId) return request;
+  if (!force && request && requestUserId === userId) return request;
 
   if (force || state.userId !== userId || state.status === "idle") {
     emit({ status: "loading", userId });
   }
   requestUserId = userId;
+  const version = ++requestVersion;
   request = authFetch(`${API_BASE}/experiments/exp-001/survey`)
     .then(async (response) => {
       if (!response.ok) throw new Error("설문 상태를 불러오지 못했습니다");
       const result = parseStatus(await response.json());
-      if (requestUserId === userId) {
+      if (requestVersion === version) {
         emit({ status: "done", userId, ...result });
       }
     })
     .catch(() => {
-      if (requestUserId === userId) emit({ status: "error", userId });
+      if (requestVersion === version) emit({ status: "error", userId });
     })
     .finally(() => {
-      if (requestUserId === userId) {
+      if (requestVersion === version) {
         request = null;
         requestUserId = null;
       }
@@ -131,6 +133,9 @@ export function useExp001SurveyStatus(): SurveyStatus {
   useEffect(() => {
     if (!checked) return;
     if (!isLoggedIn || !userId) {
+      requestVersion += 1;
+      request = null;
+      requestUserId = null;
       if (state !== INITIAL_STATE) emit(INITIAL_STATE);
       return;
     }
@@ -174,5 +179,8 @@ export async function submitExp001Survey(
     state.status === "done" && state.userId === userId
       ? state.eligible
       : true;
+  requestVersion += 1;
+  request = null;
+  requestUserId = null;
   emit({ status: "done", userId, eligible, submitted: true });
 }
