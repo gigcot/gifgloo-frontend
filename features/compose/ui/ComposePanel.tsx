@@ -75,6 +75,7 @@ export function ComposePanel() {
   const retrySourceRef = useRef<RetrySource | null>(null);
   const refreshedSurveyJobRef = useRef<string | null>(null);
   const previousRequestRef = useRef<{ gifId: string | number; file: File } | null>(null);
+  const lastConsentStateRef = useRef<string | null>(null);
 
   const job = useCompositionJob(jobId);
   const frame = useSelectedGifFrame(gif);
@@ -98,8 +99,12 @@ export function ComposePanel() {
   }, [gif, photoFile]);
 
   useEffect(() => {
-    if (hasUserSession) trackEvent("compose_consent_state", { required: consentRequired, ready: consentReady });
-  }, [hasUserSession, consentRequired, consentReady]);
+    if (!hasUserSession) return;
+    const state = `${userId}:${consentRequired}:${consentReady}`;
+    if (lastConsentStateRef.current === state) return;
+    lastConsentStateRef.current = state;
+    trackEvent("compose_consent_state", { required: consentRequired, ready: consentReady });
+  }, [userId, hasUserSession, consentRequired, consentReady]);
 
   const setPhotoFromFile = useCallback((file: File) => {
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);

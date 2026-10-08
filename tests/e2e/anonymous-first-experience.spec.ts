@@ -234,6 +234,8 @@ test("already consented session is ready without a new consent save", async ({ p
   await expect(page.getByAltText("합성 결과")).toBeVisible();
   expect(state.consents).toBe(0);
   expect(await recordedEvents(page, "compose_consent_save")).toHaveLength(0);
+  expect((await recordedEvents(page, "compose_consent_state")).map(({ required, ready }) => ({ required, ready })))
+    .toEqual([{ required: false, ready: true }]);
 });
 
 for (const failure of ["http", "network"] as const) test(`consent ${failure} failure is recorded before upload and a retry can succeed`, async ({ page }) => {
