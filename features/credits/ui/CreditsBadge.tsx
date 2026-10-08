@@ -2,7 +2,7 @@
 
 import { useCredits } from "@/features/credits/model/use-credits";
 
-export function CreditsBadge() {
+export function CreditsBadge({ compact = false, anonymous = false }: { compact?: boolean; anonymous?: boolean }) {
   const state = useCredits();
 
   if (state.status === "loading") {
@@ -22,11 +22,11 @@ export function CreditsBadge() {
     : null;
 
   return (
-    <div className="text-right">
-      <p className="text-sm font-bold text-white sm:text-base">
-        남은 이용권 {state.remainingUses.toLocaleString()}회
+    <div className="text-right" title={expiration ? `첫 만료 ${expiration} (한국 시간)` : undefined}>
+      <p className={compact ? "whitespace-nowrap text-[12px] sm:text-base" : "text-sm font-bold text-white sm:text-base"}>
+        {anonymous ? "비회원 · " : ""}사용 가능 {state.remainingUses.toLocaleString()}회
       </p>
-      {expiration && (
+      {expiration && !compact && (
         <p className="text-[10px] text-white/40 sm:text-[11px]">첫 만료 {expiration} (한국 시간)</p>
       )}
     </div>

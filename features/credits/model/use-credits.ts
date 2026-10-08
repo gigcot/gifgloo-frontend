@@ -56,7 +56,7 @@ export async function fetchCreditBalance(authFetch: AuthFetch): Promise<PassBala
 }
 
 export function useCredits(): State {
-  const { authFetch } = useAuth();
+  const { authFetch, userId } = useAuth();
   const version = useSyncExternalStore(
     subscribeToRefresh,
     () => refreshVersion,
@@ -65,10 +65,13 @@ export function useCredits(): State {
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
+    if (!userId) return;
+    let current = true;
     fetchCreditBalance(authFetch)
-      .then((balance) => setState({ status: "done", ...balance }))
-      .catch(() => setState({ status: "error" }));
-  }, [authFetch, version]);
+      .then((balance) => { if (current) setState({ status: "done", ...balance }); })
+      .catch(() => { if (current) setState({ status: "error" }); });
+    return () => { current = false; };
+  }, [authFetch, userId, version]);
 
   return state;
 }
