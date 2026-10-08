@@ -98,6 +98,10 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
     : null;
   const currentFeatured = FEATURED_RESULTS[0];
 
+  useEffect(() => {
+    if (preview) trackEvent("featured_preview_opened");
+  }, [preview]);
+
   function handleLandingCta() {
     trackEvent("landing_cta_clicked", { location: "hero" });
     document.querySelector("main")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -325,10 +329,12 @@ export function TrendingShowcase({ gifs, onCompose }: Props) {
           gif={preview}
           onConfirm={() => {
             trackEvent("gif_selected", { source: "featured" });
+            trackEvent("gif_selection_changed", { source: "featured", action: "selected" });
+            trackEvent("featured_preview_closed", { action: "confirmed" });
             onCompose(preview);
             setPreview(null);
           }}
-          onCancel={() => setPreview(null)}
+          onCancel={() => { trackEvent("featured_preview_closed", { action: "cancelled" }); setPreview(null); }}
         />
       )}
     </>

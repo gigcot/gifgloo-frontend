@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   const customerId = searchParams.get("customer_id") ?? "anonymous";
 
   let url: string;
-  if (type === "search" && q) {
+  if (type === "categories") {
+    url = `${BASE}/${APP_KEY}/gifs/categories?locale=ko_KR`;
+  } else if (type === "search" && q) {
     url = `${BASE}/${APP_KEY}/gifs/search?q=${encodeURIComponent(q)}&customer_id=${customerId}&page=${page}&per_page=${perPage}`;
   } else {
     url = `${BASE}/${APP_KEY}/gifs/trending?customer_id=${customerId}&page=${page}&per_page=${perPage}`;

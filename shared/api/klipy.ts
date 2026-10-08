@@ -89,10 +89,10 @@ export async function fetchTrending(page = 1, perPage = 24): Promise<Gif[]> {
   return (await fetchTrendingPage(page, perPage)).items;
 }
 
-export async function fetchSearchPage(q: string, page = 1, perPage = 24): Promise<GifPageResult> {
+export async function fetchSearchPage(q: string, page = 1, perPage = 24, signal?: AbortSignal): Promise<GifPageResult> {
   const cid = getCustomerId();
   const res = await fetch(
-    `/api/gif?type=search&q=${encodeURIComponent(q)}&customer_id=${cid}&page=${page}&per_page=${perPage}`
+    `/api/gif?type=search&q=${encodeURIComponent(q)}&customer_id=${cid}&page=${page}&per_page=${perPage}`, { signal }
   );
   if (!res.ok) throw new Error(`Klipy search error: ${res.status}`);
   const json = await res.json();
@@ -104,4 +104,16 @@ export async function fetchSearchPage(q: string, page = 1, perPage = 24): Promis
 
 export async function fetchSearch(q: string, page = 1): Promise<Gif[]> {
   return (await fetchSearchPage(q, page)).items;
+}
+
+export type GifCategory = { label: string; query: string };
+export async function fetchGifCategories(signal?: AbortSignal): Promise<GifCategory[]> {
+  const response = await fetch("/api/gif?type=categories", { signal });
+  if (!response.ok) throw new Error("카테고리를 불러오지 못했어요.");
+  const data = await response.json();
+  if (!data.result || !Array.isArray(data.data?.categories)) throw new Error("카테고리 응답을 확인하지 못했어요.");
+  return data.data.categories.map((item: { category: unknown; query: unknown }) => {
+    if (typeof item.category !== "string" || typeof item.query !== "string") throw new Error("카테고리 응답을 확인하지 못했어요.");
+    return { label: item.category, query: item.query };
+  });
 }
