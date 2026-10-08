@@ -59,8 +59,8 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   await page.goto("/");
 
   const header = page.locator("header");
-  const credit = header.getByText("남은 이용권 2회");
-  const surveyCta = header.getByRole("button", { name: "이용권 받기", exact: true });
+  const credit = header.getByText("사용 가능 2회");
+  const surveyCta = header.getByRole("button", { name: "사용횟수 더 받기", exact: true });
   const purchase = header.getByRole("link", { name: "구매", exact: true });
   await expect(credit).toBeVisible();
   await expect(surveyCta).toBeVisible();
@@ -108,8 +108,8 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   await submitButton.click();
 
   await expect(dialog.getByText("이용권 1회가 지급됐어요")).toBeVisible();
-  await expect(header.getByRole("button", { name: "이용권 받기", exact: true })).toHaveCount(0);
-  await expect(header.getByText("남은 이용권 3회")).toBeVisible();
+  await expect(header.getByRole("button", { name: "사용횟수 더 받기", exact: true })).toHaveCount(0);
+  await expect(header.getByText("사용 가능 3회")).toBeVisible();
   expect(state.submissions).toEqual([
     {
       intended_context: "group_chat",
@@ -133,7 +133,7 @@ test("eligible user submits the survey and receives refreshed credit balance", a
 test("reason selections toggle, require other text, and are omitted after external use", async ({ page }) => {
   const state = await setupSurvey(page);
   await page.goto("/");
-  await page.locator("header").getByRole("button", { name: "이용권 받기", exact: true }).click();
+  await page.locator("header").getByRole("button", { name: "사용횟수 더 받기", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "설문 시작" }).click();
   await dialog.getByLabel("그냥 궁금해서", { exact: true }).check();
@@ -170,7 +170,7 @@ test("eligible mobile user sees the CTA as a second row inside the sticky header
 
   const header = page.locator("header");
   const logo = header.getByRole("link", { name: "gifgloo" });
-  const surveyCta = header.getByRole("button", { name: "이용권 받기", exact: true });
+  const surveyCta = header.getByRole("button", { name: "사용횟수 더 받기", exact: true });
   await expect(surveyCta).toBeVisible();
   await expect(header.getByRole("link", { name: "구매", exact: true })).toBeHidden();
 
@@ -188,5 +188,5 @@ test("ineligible user does not see the survey CTA", async ({ page }) => {
   await setupSurvey(page, false);
   await page.goto("/");
 
-  await expect(page.getByRole("button", { name: "이용권 받기", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "사용횟수 더 받기", exact: true })).toHaveCount(0);
 });

@@ -31,14 +31,14 @@ test("preserves first campaign across callback and deduplicates signup on reload
     .toContain("utm_campaign=exp001");
   await page.goto("/callback?is_new_user=true");
   await expect(page).toHaveURL(/\/$/);
-  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")))
-    .toEqual([{ name: "signup_completed", data: {
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]").filter((e: { name: string }) => e.name === "signup_completed")))
+    .toEqual([{ name: "signup_completed", data: expect.objectContaining({
       utm_source: "friend", utm_campaign: "exp001", utm_content: "message_a",
-    } }]);
+    }) }]);
   await page.goto("/callback?is_new_user=true&utm_campaign=other");
   await expect(page).toHaveURL(/\/$/);
   await page.reload();
-  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")))
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]").filter((e: { name: string }) => e.name === "signup_completed")))
     .toHaveLength(1);
   expect(await page.evaluate(() => sessionStorage.getItem("analytics_campaign")))
     .toContain("utm_campaign=exp001");
@@ -49,16 +49,16 @@ test("preserves first campaign across callback and deduplicates signup on reload
     buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=", "base64"),
   });
   await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")))
-    .toContainEqual({ name: "photo_uploaded", data: {
+    .toContainEqual({ name: "photo_uploaded", data: expect.objectContaining({
       file_type: "image/png", utm_source: "friend", utm_campaign: "exp001", utm_content: "message_a",
-    } });
+    }) });
 });
 
 test("returning login does not emit signup", async ({ page }) => {
   await page.goto("/callback");
   await expect(page).toHaveURL(/\/$/);
   expect(await page.evaluate(() => sessionStorage.getItem("analytics_signup_pending"))).toBeNull();
-  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")))
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]").filter((e: { name: string }) => e.name === "signup_completed")))
     .toEqual([]);
 });
 

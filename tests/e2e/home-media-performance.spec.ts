@@ -94,16 +94,16 @@ test("loads optimized home media and deduplicates auth lookup", async ({ page })
   });
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByText("합성할 GIF를 찾아보세요")).toBeVisible();
+  await expect(page.getByText("어떤 GIF로 만들어볼까요?")).toBeVisible();
   await expect.poll(() => authRequests).toBe(1);
   await page.waitForTimeout(500);
 
   expect(mediaRequests.some((pathname) => pathname.endsWith(".mp4"))).toBe(true);
   expect(mediaRequests.filter((pathname) => pathname.endsWith(".gif"))).toEqual([]);
 
-  await page.getByText("GIF 1", { exact: true }).first().click();
+  await page.getByRole("button", { name: "GIF 1 선택", exact: true }).click();
   authenticated = true;
-  await page.getByRole("button", { name: "네, 만들기" }).click();
+  await page.getByRole("button", { name: "이 GIF로 만들기" }).click();
   await expect.poll(() => authRequests).toBe(2);
   await expect.poll(() => page.evaluate(
     () => (window as typeof window & { __identifiedUserIds?: string[] }).__identifiedUserIds,
