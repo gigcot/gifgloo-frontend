@@ -52,7 +52,8 @@ async function setup(page: Page, mode: "normal" | "blocked" | "offline" = "norma
     if (/\/compositions\/guest-job-\d+\/status/.test(path)) return route.fulfill({ contentType: "text/event-stream", body: `data: ${JSON.stringify({ status: "COMPLETED", stage: null, result_url: "/icon.png", result_asset_id: "guest-asset", failed_reason: null })}\n\n` });
     if (path === "/assets/guest-asset/share") { state.shares += 1; return route.fulfill({ json: { share_token: "public-guest-share" } }); }
     if (path === "/assets/guest-asset/download") return route.fulfill({ contentType: "image/gif", headers: { "Content-Disposition": 'attachment; filename="result.gif"' }, body: "GIF89a" });
-    if (path === "/compositions") return route.fulfill({ json: { jobs: state.compositions ? [{ job_id: "guest-job-1", status: "COMPLETED", source_gif_url: "/icon.png", target_url: "/icon.png", result_url: "/icon.png", result_asset_id: "guest-asset", created_at: "2026-10-05T00:00:00Z" }] : [] } });
+    if (path === "/assets/guest-photo/content") return route.fulfill({ contentType: "image/png", headers: { "Cache-Control": "private, no-store" }, path: "public/icon.png" });
+    if (path === "/compositions") return route.fulfill({ json: { jobs: state.compositions ? [{ job_id: "guest-job-1", status: "COMPLETED", source_gif_url: "/icon.png", target_asset_id: "guest-photo", result_url: "/icon.png", result_asset_id: "guest-asset", created_at: "2026-10-05T00:00:00Z" }] : [] } });
     if (path.startsWith("/oauth/")) state.oauth += 1;
     return route.fulfill({ status: 500, json: { message: `Unexpected mocked endpoint: ${path}` } });
   });
@@ -111,9 +112,51 @@ test("anonymous home journey reaches result, download, link, retry and return wi
   await page.goto("/my-assets");
   await page.getByAltText("합성 결과").click();
   await expect(page.getByRole("button", { name: "다운로드", exact: true })).toBeVisible();
+  await expect(page.getByAltText("내 사진")).toHaveAttribute("src", /^blob:/);
+  await expect.poll(() => page.getByAltText("내 사진").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
   await page.reload();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
   expect(state.sessionCalls).toBe(2);
+});
+
+test("owned private photo loads through the API and releases its blob when closed", async ({ page }) => {
+  await setup(page);
+  await page.context().addCookies([{ name: "guest_test_session", value: "yes", url: "http://127.0.0.1:3100" }]);
+  await page.route("http://localhost:8000/compositions", route => route.fulfill({ json: { jobs: [{
+    job_id: "guest-job-1", status: "COMPLETED", source_gif_url: "/icon.png",
+    target_asset_id: "guest-photo", result_url: "/icon.png", result_asset_id: "guest-asset", created_at: "2026-10-05T00:00:00Z",
+  }] } }));
+  await page.goto("/my-assets");
+  await page.getByAltText("합성 결과").click();
+  await expect(page.getByAltText("내 사진")).toHaveAttribute("src", /^blob:/);
+  await expect.poll(() => page.getByAltText("내 사진").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+  const previous = await page.getByAltText("내 사진").getAttribute("src");
+  await page.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect.poll(() => page.evaluate(async (url) => {
+    try { await fetch(url!); return true; } catch { return false; }
+  }, previous)).toBe(false);
+  await page.getByAltText("합성 결과").click();
+  await expect(page.getByAltText("내 사진")).toHaveAttribute("src", /^blob:/);
+  await expect(page.getByAltText("내 사진")).not.toHaveAttribute("src", previous!);
+});
+
+test("private photo denial keeps the GIF available and never requests the old public photo", async ({ page }) => {
+  await setup(page);
+  await page.context().addCookies([{ name: "guest_test_session", value: "yes", url: "http://127.0.0.1:3100" }]);
+  const publicRequests: string[] = [];
+  await page.route("https://cdn.example/**", route => { publicRequests.push(route.request().url()); return route.abort(); });
+  await page.route("http://localhost:8000/compositions", route => route.fulfill({ json: { jobs: [{
+    job_id: "guest-job-1", status: "COMPLETED", source_gif_url: "/icon.png",
+    target_asset_id: "guest-photo", target_url: "https://cdn.example/compositions/guest-job-1/target.png",
+    result_url: "/icon.png", result_asset_id: "guest-asset", created_at: "2026-10-05T00:00:00Z",
+  }] } }));
+  await page.route("http://localhost:8000/assets/guest-photo/content", route => route.fulfill({ status: 403, json: {} }));
+  await page.goto("/my-assets");
+  await page.getByAltText("합성 결과").click();
+  await expect(page.getByText("미리보기를 불러오지 못했어요")).toBeVisible();
+  await expect(page.getByAltText("내 사진")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "다운로드", exact: true })).toBeEnabled();
+  expect(publicRequests).toEqual([]);
 });
 
 test("anonymous survey reward is available after completion and stays submitted on return", async ({ page }) => {

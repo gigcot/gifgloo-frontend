@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CompositionJob } from "@/features/compositions/model/types";
 import { API_BASE } from "@/shared/lib/api-base";
 import { downloadGif } from "@/shared/lib/download";
 import { ShareButton } from "@/shared/ui/ShareButton";
 import { ObservedResultImage } from "@/shared/ui/ObservedResultImage";
+import { useAuth } from "@/shared/lib/use-auth";
 
 type Props = {
   job: CompositionJob;
@@ -56,6 +57,35 @@ function MediaTile({
 }
 
 export function CompositionDetailModal({ job, onClose }: Props) {
+  const { authFetch, userId } = useAuth();
+  const [photo, setPhoto] = useState<{ assetId: string; ownerId: string; url: string | null } | null>(null);
+  const assetId = job.target_asset_id;
+
+  useEffect(() => {
+    if (!assetId || !userId) return;
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    authFetch(`${API_BASE}/assets/${encodeURIComponent(assetId)}/content`, {
+      signal: controller.signal, cache: "no-store", redirect: "error",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("사진을 불러오지 못했어요");
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPhoto({ assetId, ownerId: userId, url: objectUrl });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setPhoto({ assetId, ownerId: userId, url: null });
+      });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [assetId, authFetch, userId]);
+
+  const currentPhoto = photo?.assetId === assetId && photo.ownerId === userId ? photo : null;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-md sm:items-center"
@@ -120,7 +150,12 @@ export function CompositionDetailModal({ job, onClose }: Props) {
           <p className="mb-2 text-xs font-semibold text-white/40">사용한 재료</p>
           <div className="grid grid-cols-2 gap-2">
             <MediaTile src={job.source_gif_url} alt="베이스 GIF" label="베이스 GIF" className="aspect-square" />
-            <MediaTile src={job.target_url} alt="내 사진" label="내 사진" className="aspect-square" />
+            <MediaTile
+              key={`${userId}:${assetId}`}
+              src={currentPhoto?.url}
+              alt="내 사진" label="내 사진" className="aspect-square"
+              pendingText={currentPhoto ? "미리보기를 불러오지 못했어요" : "처리 중"}
+            />
           </div>
         </div>
       </div>

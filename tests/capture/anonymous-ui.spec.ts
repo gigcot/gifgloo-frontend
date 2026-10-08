@@ -80,7 +80,8 @@ async function setup(page: Page, mode: Mode = "normal") {
     if (pathname === "/assets/review-asset/share") return route.fulfill({ json: { share_token: "review-only-not-public" } });
     if (pathname === "/assets/review-asset/download") return route.fulfill({ contentType: "image/gif", headers: { "Content-Disposition": 'attachment; filename="review-result.gif"' }, path: "public/punch_pepe_podo.gif" });
     if (pathname === "/compositions/review-job/feedback") return route.fulfill({ json: {} });
-    if (pathname === "/compositions") return route.fulfill({ json: { jobs: state.jobs ? [{ job_id: "review-job", status: "COMPLETED", source_gif_url: "/insung_hwang.gif", target_url: "/icon.png", result_url: "/punch_pepe_podo.gif", result_asset_id: "review-asset", created_at: "2026-10-06T00:00:00Z" }] : [] } });
+    if (pathname === "/assets/review-photo/content") return route.fulfill({ contentType: "image/png", path: "public/icon.png" });
+    if (pathname === "/compositions") return route.fulfill({ json: { jobs: state.jobs ? [{ job_id: "review-job", status: "COMPLETED", source_gif_url: "/insung_hwang.gif", target_asset_id: "review-photo", result_url: "/punch_pepe_podo.gif", result_asset_id: "review-asset", created_at: "2026-10-06T00:00:00Z" }] : [] } });
     unexpected.push(`${request.method()} ${pathname}`);
     return route.fulfill({ status: 500, json: { message: "Unconfigured capture fixture" } });
   });
