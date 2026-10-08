@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckIcon, QuestionMarkCircledIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { getGifUrl, type Gif } from "@/entities/gif/model";
 import { type GifFrame } from "../model/use-gif-frames";
@@ -45,12 +45,24 @@ export function FrameHelp({ count, compact = false }: { count?: number; compact?
 }
 
 export function GifChoice({ gif, selected, frame, onInspect, onSelect }: { gif: Gif; selected: boolean; frame?: GifFrame; onInspect: (gif: Gif) => void; onSelect: (gif: Gif) => void }) {
+  const [inspectionIntent, setInspectionIntent] = useState<{ delay: number; suppressSelection: boolean } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const start = useRef<{ x: number; y: number } | null>(null);
   const suppressClick = useRef(false);
-  function clearIntent() { clearTimeout(timer.current); }
-  function schedule(delay: number) { clearIntent(); timer.current = setTimeout(() => onInspect(gif), delay); }
-  useEffect(() => () => clearTimeout(timer.current), []);
+  function clearIntent() { clearTimeout(timer.current); setInspectionIntent(null); }
+  function schedule(delay: number, suppressSelection = false) {
+    clearIntent();
+    setInspectionIntent({ delay, suppressSelection });
+  }
+  useEffect(() => {
+    if (!inspectionIntent) return;
+    const timeout = setTimeout(() => {
+      if (inspectionIntent.suppressSelection) suppressClick.current = true;
+      onInspect(gif);
+    }, inspectionIntent.delay);
+    timer.current = timeout;
+    return () => clearTimeout(timeout);
+  }, [gif, onInspect, inspectionIntent]);
   return <button className={`gif-choice${selected ? " selected" : ""}`} aria-label={`${gif.title} 선택`} aria-pressed={selected}
     aria-describedby={frame ? `frames-${gif.id}` : undefined}
     onPointerEnter={event => { if (event.pointerType === "mouse") schedule(350); }}
@@ -60,9 +72,8 @@ export function GifChoice({ gif, selected, frame, onInspect, onSelect }: { gif: 
     onPointerDown={event => {
       suppressClick.current = false;
       if (event.pointerType === "mouse" || !event.isPrimary) return;
-      clearIntent();
       start.current = { x: event.clientX, y: event.clientY };
-      timer.current = setTimeout(() => { suppressClick.current = true; onInspect(gif); }, 450);
+      schedule(450, true);
     }}
     onPointerMove={event => {
       if (start.current && Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 10) {

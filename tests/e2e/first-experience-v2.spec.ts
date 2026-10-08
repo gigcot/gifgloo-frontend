@@ -87,11 +87,16 @@ test("touch inspection does not select on long press release", async ({ page }) 
   await page.goto("/");
   const choice = page.getByRole("button", { name: "물 맞는 하마 선택", exact: true });
   await choice.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true, clientX: 40, clientY: 40 });
-  await page.waitForTimeout(500);
+  await expect(choice.getByRole("status")).toHaveText("20프레임");
+  await expect(choice).toHaveAttribute("aria-pressed", "false");
   await choice.dispatchEvent("pointerup", { pointerType: "touch", isPrimary: true });
   await choice.dispatchEvent("click", { detail: 1 });
   await expect(choice).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".selection-bar")).toHaveCount(0);
+  await choice.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true });
+  await choice.dispatchEvent("pointerup", { pointerType: "touch", isPrimary: true });
+  await choice.dispatchEvent("click", { detail: 1 });
+  await expect(choice).toHaveAttribute("aria-pressed", "true");
 });
 
 test("request acceptance gates safe departure and notification registration is explicit", async ({ page }) => {
