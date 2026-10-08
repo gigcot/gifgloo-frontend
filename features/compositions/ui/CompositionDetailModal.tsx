@@ -5,6 +5,7 @@ import type { CompositionJob } from "@/features/compositions/model/types";
 import { API_BASE } from "@/shared/lib/api-base";
 import { downloadGif } from "@/shared/lib/download";
 import { ShareButton } from "@/shared/ui/ShareButton";
+import { ObservedResultImage } from "@/shared/ui/ObservedResultImage";
 
 type Props = {
   job: CompositionJob;
@@ -84,12 +85,15 @@ export function CompositionDetailModal({ job, onClose }: Props) {
           </button>
         </div>
 
-        <MediaTile
+        {job.result_url && job.result_asset_id ? <ObservedResultImage
+          src={job.result_url} jobId={job.job_id} assetId={job.result_asset_id} source="my_assets"
+          className="h-[45vh] min-h-72 max-h-[560px] w-full object-contain"
+        /> : <MediaTile
           src={job.result_url}
           alt="합성 결과"
           className="h-[45vh] min-h-72 max-h-[560px] w-full"
           imageClassName="object-contain"
-        />
+        />}
 
         {job.result_url && (
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -97,6 +101,7 @@ export function CompositionDetailModal({ job, onClose }: Props) {
               onClick={() => downloadGif(
                 `${API_BASE}/assets/${job.result_asset_id}/download`,
                 "my_assets",
+                job.result_asset_id ?? undefined,
               )}
               disabled={!job.result_asset_id}
               className="flex flex-1 items-center justify-center gap-2 rounded-full bg-purple-600 py-3 text-sm font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-40"
