@@ -11,10 +11,12 @@ type State =
   | { status: "done"; jobs: CompositionJob[] };
 
 export function useMyCompositions(): State {
-  const { authFetch } = useAuth();
+  const { authFetch, userId, checked } = useAuth();
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
+    if (!checked || !userId) return;
+    let current = true;
     authFetch(`${API_BASE}/compositions`)
       .then((res) => {
         if (!res.ok) throw new Error();
@@ -24,10 +26,11 @@ export function useMyCompositions(): State {
         const jobs: CompositionJob[] = (data.jobs ?? []).filter(
           (j: CompositionJob) => j.status !== "FAILED",
         );
-        setState({ status: "done", jobs });
+        if (current) setState({ status: "done", jobs });
       })
-      .catch(() => setState({ status: "error" }));
-  }, [authFetch]);
+      .catch(() => { if (current) setState({ status: "error" }); });
+    return () => { current = false; };
+  }, [authFetch, checked, userId]);
 
-  return state;
+  return checked && !userId ? { status: "done", jobs: [] } : state;
 }

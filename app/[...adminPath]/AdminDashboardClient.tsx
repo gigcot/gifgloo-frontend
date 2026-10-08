@@ -296,6 +296,8 @@ export function AdminDashboardClient({ adminPath }: { adminPath: string }) {
 
   useEffect(() => {
     if (access !== "allowed") return;
+    // 권한 확인 이후에만 외부 API 조회와 로딩 상태를 시작한다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOverview();
   }, [access, loadOverview]);
 

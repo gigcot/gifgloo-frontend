@@ -1,82 +1,50 @@
 "use client";
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Gif } from "@/entities/gif/model";
 import { fetchSearchPage } from "@/shared/api/klipy";
+import { trackEvent } from "@/shared/lib/umami";
 
-type UseGifSearchResult = {
-  results: Gif[];
-  loading: boolean;
-  loadingMore: boolean;
-  error: boolean;
-  hasMore: boolean;
-  loadMore: () => void;
-};
-
-export function useGifSearch(query: string): UseGifSearchResult {
-  const [results, setResults] = useState<Gif[]>([]);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const loadingMoreRef = useRef(false);
-
+type SearchState = { query: string; results: Gif[]; page: number; loading: boolean; loadingMore: boolean; error: boolean; hasMore: boolean };
+const empty: SearchState = { query: "", results: [], page: 1, loading: false, loadingMore: false, error: false, hasMore: false };
+export function useGifSearch(query: string) {
+  const [state, setState] = useState<SearchState>(empty);
+  const requestRef = useRef<AbortController | null>(null);
+  const moreRef = useRef(false);
   useEffect(() => {
-    if (!query) return;
-
-    const timer = setTimeout(() => {
-      setLoading(true);
-      setError(false);
-      fetchSearchPage(query, 1)
-        .then((result) => {
-          setResults(result.items);
-          setPage(result.currentPage);
-          setHasMore(result.hasNext);
-        })
-        .catch(() => {
-          setResults([]);
-          setError(true);
-          setHasMore(false);
-        })
-        .finally(() => setLoading(false));
+    const controller = new AbortController();
+    requestRef.current = controller;
+    moreRef.current = false;
+    const timer = setTimeout(async () => {
+      if (!query) { setState(empty); return; }
+      setState({ ...empty, query, loading: true });
+      trackEvent("gif_search_requested");
+      try {
+        const page = await fetchSearchPage(query, 1, 24, controller.signal);
+        if (controller.signal.aborted) return;
+        setState({ ...empty, query, results: page.items, page: page.currentPage, hasMore: page.hasNext });
+        trackEvent("gif_search_result", { status: "success", count: page.items.length });
+      } catch {
+        if (controller.signal.aborted) return;
+        setState({ ...empty, query, error: true });
+        trackEvent("gif_search_result", { status: "error", count: 0 });
+      }
     }, 400);
-
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); controller.abort(); };
   }, [query]);
-
   const loadMore = useCallback(() => {
-    if (!query || loading || loadingMoreRef.current || !hasMore) return;
-
-    const nextPage = page + 1;
-    loadingMoreRef.current = true;
-    setLoadingMore(true);
-    setError(false);
-    fetchSearchPage(query, nextPage)
-      .then((result) => {
-        setResults((prev) => Array.from(
-          new Map([...prev, ...result.items].map((gif) => [gif.id, gif])).values()
-        ));
-        setPage(result.currentPage);
-        setHasMore(result.hasNext);
-      })
-      .catch(() => setError(true))
-      .finally(() => {
-        loadingMoreRef.current = false;
-        setLoadingMore(false);
-      });
-  }, [hasMore, loading, page, query]);
-
-  if (!query) {
-    return {
-      results: [],
-      loading: false,
-      loadingMore: false,
-      error: false,
-      hasMore: false,
-      loadMore,
-    };
-  }
-
-  return { results, loading, loadingMore, error, hasMore, loadMore };
+    const controller = requestRef.current;
+    if (!controller || !query || state.query !== query || state.loading || moreRef.current || !state.hasMore) return;
+    moreRef.current = true;
+    setState(current => ({ ...current, loadingMore: true }));
+    fetchSearchPage(query, state.page + 1, 24, controller.signal).then(page => {
+      if (controller.signal.aborted) return;
+      setState(current => ({ ...current, results: [...new Map([...current.results, ...page.items].map(gif => [gif.id, gif])).values()],
+        page: page.currentPage, hasMore: page.hasNext, error: false }));
+    }).catch(() => {
+      if (!controller.signal.aborted) setState(current => ({ ...current, error: true }));
+    }).finally(() => {
+      if (!controller.signal.aborted) { moreRef.current = false; setState(current => ({ ...current, loadingMore: false })); }
+    });
+  }, [query, state]);
+  return { ...(query ? state.query === query ? state : { ...empty, loading: true } : empty), loadMore };
 }

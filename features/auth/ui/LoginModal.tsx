@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 
 import type { Gif } from "@/entities/gif/model";
 import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from "@/features/auth/model/signup-consent";
 import { API_BASE } from "@/shared/lib/api-base";
 import { getCampaignAttribution } from "@/shared/lib/campaign-attribution";
+import { useAuth } from "@/shared/lib/use-auth";
 
 type LoginModalProps = {
   onClose: () => void;
@@ -14,12 +16,21 @@ type LoginModalProps = {
 };
 
 export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
+  const { isAnonymous } = useAuth();
   const [isFourteenOrOlder, setIsFourteenOrOlder] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const canContinue = isFourteenOrOlder && agreedToTerms && agreedToPrivacy;
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", closeOnEscape); };
+  }, [onClose]);
 
   async function startSocialLogin(provider: "kakao" | "google") {
     if (!canContinue || loading) return;
@@ -57,18 +68,19 @@ export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
     }
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-modal-title"
-        className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-6 shadow-2xl sm:p-8"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col gap-4 overflow-y-auto rounded-2xl border border-white/10 bg-[#1a1a1a] p-6 shadow-2xl sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
+        <button onClick={onClose} aria-label="닫기" className="self-end text-sm text-white/60">닫기</button>
         <div className="text-center">
           <h2 id="login-modal-title" className="text-xl font-bold text-white">로그인 또는 회원가입</h2>
           <p className="mt-2 text-sm leading-6 text-white/50">
@@ -76,6 +88,9 @@ export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
           </p>
         </div>
 
+        {isAnonymous && <p className="rounded-xl bg-purple-500/10 p-3 text-sm leading-6 text-purple-100">
+          처음 가입하면 지금 결과와 남은 횟수가 그대로 연결돼요. 기존 계정으로 로그인하면 그 계정으로 전환되며, 지금 체험한 결과와 횟수는 옮겨지지 않아요. 가입으로 무료 횟수가 다시 지급되지는 않아요.
+        </p>}
         <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
           <label className="flex cursor-pointer items-start gap-3 text-sm text-white/75">
             <input
@@ -152,6 +167,7 @@ export function LoginModal({ onClose, pendingGif }: LoginModalProps) {
         )}
         {error && <p role="alert" className="text-center text-xs text-red-300">{error}</p>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

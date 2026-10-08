@@ -127,12 +127,12 @@ async function loadStatus(
 }
 
 export function useExp001SurveyStatus(): SurveyStatus {
-  const { authFetch, checked, isLoggedIn, userId } = useAuth();
+  const { authFetch, checked, hasUserSession, userId } = useAuth();
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, () => INITIAL_STATE);
 
   useEffect(() => {
     if (!checked) return;
-    if (!isLoggedIn || !userId) {
+    if (!hasUserSession || !userId) {
       requestVersion += 1;
       request = null;
       requestUserId = null;
@@ -140,7 +140,7 @@ export function useExp001SurveyStatus(): SurveyStatus {
       return;
     }
     void loadStatus(userId, authFetch, false);
-  }, [authFetch, checked, isLoggedIn, userId]);
+  }, [authFetch, checked, hasUserSession, userId]);
 
   if (!userId || snapshot.userId !== userId) return INITIAL_STATE;
   return snapshot;

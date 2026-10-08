@@ -1,12 +1,16 @@
 "use client";
 
 import type { Gif } from "@/entities/gif/model";
-import { GifMedia } from "@/entities/gif/ui/GifMedia";
+import { useEffect, useRef } from "react";
+import { getGifUrl } from "@/entities/gif/model";
+import { GifChoice } from "./GifFrameInfo";
+import { useGifFrames } from "../model/use-gif-frames";
 import { useGifSearch } from "@/features/gif-search/model/use-gif-search";
 import { trackEvent } from "@/shared/lib/umami";
 
 type Props = {
   query: string;
+  source?: string;
   trendingGifs: Gif[];
   trendingHasMore?: boolean;
   trendingLoadingMore?: boolean;
@@ -17,6 +21,7 @@ type Props = {
 
 export function GifGrid({
   query,
+  source = query ? "search" : "trending",
   trendingGifs,
   trendingHasMore = false,
   trendingLoadingMore = false,
@@ -24,6 +29,9 @@ export function GifGrid({
   onSelect,
   onLoadMoreTrending,
 }: Props) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const { frames, inspect } = useGifFrames();
+  const scrollBucket = useRef(-1);
   const {
     results: searchResults,
     loading,
@@ -37,13 +45,30 @@ export function GifGrid({
   const hasMore = query ? searchHasMore : trendingHasMore;
   const loadingMore = query ? searchLoadingMore : trendingLoadingMore;
 
+  useEffect(() => {
+    const element = listRef.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { trackEvent("gif_list_viewed", { source, count: gifs.length }); observer.disconnect(); }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [query, gifs.length, source]);
+
   function selectGif(gif: Gif) {
-    trackEvent("gif_selected", { source: query ? "search" : "trending" });
+    const action = selectedId === gif.id ? "cleared" : selectedId ? "changed" : "selected";
+    if (action !== "cleared") trackEvent("gif_selected", { source });
+    trackEvent("gif_selection_changed", { action, source, control: "gif_tile" });
     onSelect(gif);
   }
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     const target = e.currentTarget;
+    const bucket = Math.floor(4 * target.scrollTop / Math.max(1, target.scrollHeight - target.clientHeight));
+    if (bucket !== scrollBucket.current) {
+      scrollBucket.current = bucket;
+      trackEvent("gif_list_scrolled", { source, depth_quarter: bucket });
+    }
     const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
     if (distanceFromBottom > 600 || loadingMore || !hasMore) return;
 
@@ -67,7 +92,7 @@ export function GifGrid({
   if (loading || (!query && trendingGifs.length === 0)) {
     return (
       <div className="h-[72vh] overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-2">
-        <div className="columns-2 gap-2 sm:columns-3 md:columns-4 lg:columns-5">
+        <div className="gif-grid">
         {Array.from({ length: 12 }).map((_, i) => (
           <div
             key={i}
@@ -80,7 +105,7 @@ export function GifGrid({
     );
   }
 
-  if (searchError) {
+  if (searchError && gifs.length === 0) {
     return (
       <p className="py-12 text-center text-white/40">검색 중 오류가 발생했어요. 다시 시도해 주세요.</p>
     );
@@ -94,28 +119,15 @@ export function GifGrid({
 
   return (
     <div
+      ref={listRef}
       onScroll={handleScroll}
       onWheel={handleWheel}
       className="h-[72vh] overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-2 pr-1 [scrollbar-color:rgba(255,255,255,0.24)_transparent] [scrollbar-width:thin]"
     >
-      <div className="columns-2 gap-2 sm:columns-3 md:columns-4 lg:columns-5">
+      <div className="gif-grid">
         {gifs.map((gif) => (
-          <div
-            key={gif.id}
-            onClick={() => selectGif(gif)}
-            className={`mb-2 cursor-pointer overflow-hidden rounded-lg transition-all [contain-intrinsic-size:220px] [content-visibility:auto] ${
-              selectedId === gif.id
-                ? "ring-2 ring-purple-500 ring-offset-1 ring-offset-[#0d0d0d]"
-                : "hover:opacity-80"
-            }`}
-          >
-            <GifMedia
-              gif={gif}
-              size="sm"
-              alt={gif.title}
-              className="h-full w-full object-cover"
-            />
-          </div>
+          <GifChoice key={gif.id} gif={gif} selected={selectedId === gif.id}
+            frame={frames.get(getGifUrl(gif, "hd"))} onInspect={inspect} onSelect={selectGif} />
         ))}
       </div>
       {loadingMore && (

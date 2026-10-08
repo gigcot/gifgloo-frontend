@@ -29,3 +29,26 @@ Checks callback campaign survival, first-touch preservation, signup deduplicatio
 `npx tsc --noEmit`
 
 Targeted ESLint checks cover changed source and test files. Production delivery must be verified after deployment; this change is not deployed.
+
+## First-experience instrumentation checks
+
+Event definitions and denominator rules live in the [measurement checklist](https://app.notion.com/p/3ed920d3d9998190bb80f4d0b125a724), not in this test guide.
+
+Build safely against the mocked API and mark custom events as internal:
+
+```sh
+NEXT_PUBLIC_API_BASE=http://localhost:8000 NEXT_PUBLIC_ANALYTICS_INTERNAL=true npm run build
+E2E_PRODUCTION=true npx playwright test tests/e2e/anonymous-first-experience.spec.ts --project=chromium
+```
+
+The default suite blocks the real tracker. It covers both GIF-clear controls, aggregate consent readiness and save failures, frame-confirmation cancel/continue under the same attempt, unrelated 422 errors, and the home-to-result flow. Cross-browser checks use `E2E_CROSS_BROWSER=true` with `--project=firefox --project=webkit`.
+
+Only run the following with authorization to send synthetic QA events to the configured Umami website:
+
+```sh
+E2E_PRODUCTION=true LIVE_UMAMI=true npx playwright test tests/e2e/anonymous-first-experience.spec.ts --grep 'live Umami receives' --project=chromium --workers=1 --output=./test-results/umami-live
+```
+
+The opt-in test leaves the real Umami script active but fulfills all backend/synthesis calls locally. It uses a synthetic user, `traffic_type=internal`, a unique `qa_measurement_...` campaign and a localhost hostname; custom events without the internal marker are blocked. Browser metadata and QA events are sent to Umami. Native pageviews do not carry the custom traffic marker: exclude the local hostname as well as internal events when reading real user traffic. Do not rebuild/deploy a public release with `NEXT_PUBLIC_ANALYTICS_INTERNAL=true`.
+
+HTTP acceptance and dashboard appearance are separate checks. The test reports the QA campaign, flow ID and accepted event count, and attaches sanitized receipts to reporters that preserve attachments. Check the dashboard's Events and Properties tabs separately; raw event or visitor counts are not a deduplicated `flow_id` funnel.

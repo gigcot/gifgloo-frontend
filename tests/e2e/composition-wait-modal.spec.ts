@@ -9,6 +9,8 @@ const API_CORS_HEADERS = {
 
 test("shows a countdown modal and retries composition when the wait ends", async ({ page }) => {
   let compositionRequests = 0;
+  await page.route("https://cloud.umami.is/**", (route) => route.abort());
+  await page.route("http://localhost:8000/experiments/exp-001/survey", (route) => route.fulfill({ json: { eligible: false, submitted: false } }));
 
   await page.addInitScript(() => {
     localStorage.setItem("compose_gif", JSON.stringify({
@@ -29,7 +31,7 @@ test("shows a countdown modal and retries composition when the wait ends", async
     await route.fulfill({
       status: 200,
       headers: API_CORS_HEADERS,
-      body: JSON.stringify({ email: "e2e@example.com" }),
+      body: JSON.stringify({ user_id: "wait-user", user_kind: "member", email: "e2e@example.com" }),
     });
   });
   await page.route("http://localhost:8000/credits/balance", async (route) => {
@@ -83,9 +85,9 @@ test("shows a countdown modal and retries composition when the wait ends", async
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
   await expect(page.getByAltText("my photo")).toBeVisible();
 
-  await page.clock.install();
-  await page.getByRole("button", { name: "합성하기", exact: true }).click();
-  await page.getByRole("button", { name: "시작하기" }).click();
+  await page.clock.install({ time: new Date("2026-10-07T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-07T00:00:01Z"));
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
 
   const waitDialog = page.getByRole("dialog");
   await expect(waitDialog).toBeVisible();

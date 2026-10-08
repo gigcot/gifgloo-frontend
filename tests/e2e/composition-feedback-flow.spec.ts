@@ -113,14 +113,13 @@ async function openCompletedComposition(
   await page.goto("/compose");
   await expect(page.getByAltText("selected gif")).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
-  await page.getByRole("button", { name: "합성하기", exact: true }).click();
-  await page.getByRole("button", { name: "시작하기" }).click();
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
 
   return state;
 }
 
-test("keeps the result visible and places feedback before actions and usage", async ({ page }) => {
+test("keeps the result visible and places optional neutral feedback after actions", async ({ page }) => {
   await openCompletedComposition(page);
 
   await page.waitForTimeout(1_000);
@@ -128,52 +127,45 @@ test("keeps the result visible and places feedback before actions and usage", as
 
   const result = await page.getByAltText("합성 결과").boundingBox();
   const feedback = await page.getByRole("button", { name: "아쉬워요" }).boundingBox();
-  const download = await page.getByRole("button", { name: "다운로드" }).boundingBox();
-  const usage = await page.getByText("사용 전").boundingBox();
+  const download = await page.getByRole("button", { name: "GIF 저장" }).boundingBox();
 
-  expect(result?.width).toBeGreaterThan(500);
+  expect(result?.width).toBeGreaterThan(300);
   expect(result!.y + result!.height).toBeLessThan(feedback!.y);
-  expect(feedback!.y).toBeLessThan(download!.y);
-  expect(download!.y).toBeLessThan(usage!.y);
+  expect(download!.y).toBeLessThan(feedback!.y);
+  await expect(page.getByText("사용 전", { exact: true })).toHaveCount(0);
 });
 
-test("asks for feedback without an image and resumes link sharing", async ({ page }) => {
+test("copies the link without requiring feedback, and keeps feedback optional", async ({ page }) => {
   const state = await openCompletedComposition(page);
 
   await page.getByRole("button", { name: "링크 복사" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator("img")).toHaveCount(0);
-  expect(state.shareRequests).toBe(0);
-
-  await dialog.getByRole("button", { name: "만족해요" }).click();
-  await expect(dialog).toBeHidden();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => state.shareRequests).toBe(1);
+  expect(state.feedback).toEqual([]);
+  await page.getByRole("button", { name: "만족해요" }).click();
   await expect.poll(() => state.feedback).toEqual([true]);
   await expect.poll(() => state.shareRequests).toBe(1);
   await expect(page.getByText("평가해 주셔서 감사해요")).toBeVisible();
 });
 
-test("resumes opening the profile menu after feedback", async ({ page }) => {
+test("opens the profile menu without requiring feedback", async ({ page }) => {
   const state = await openCompletedComposition(page);
 
   await page.locator("header").getByRole("button").last().click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "아쉬워요" }).click();
-
-  await expect.poll(() => state.feedback).toEqual([false]);
+  await expect(dialog).toHaveCount(0);
+  expect(state.feedback).toEqual([]);
   await expect(page.getByRole("button", { name: "내 에셋" })).toBeVisible();
 });
 
-test("resumes home navigation after feedback", async ({ page }) => {
+test("navigates home without requiring feedback", async ({ page }) => {
   const state = await openCompletedComposition(page);
 
   await page.getByRole("link", { name: "gifgloo" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "만족해요" }).click();
-
-  await expect.poll(() => state.feedback).toEqual([true]);
+  await expect(dialog).toHaveCount(0);
+  expect(state.feedback).toEqual([]);
   await expect(page).toHaveURL("/");
 });
 
@@ -182,12 +174,13 @@ test("shows the non-blocking survey reminder once when starting another composit
 
   await page.getByRole("button", { name: "다시 만들기" }).click();
   const feedbackDialog = page.getByRole("dialog");
-  await expect(feedbackDialog).toBeVisible();
-  await feedbackDialog.getByRole("button", { name: "만족해요" }).click();
+  await expect(feedbackDialog).toHaveCount(0);
+  await expect(page.getByAltText("my photo")).toBeVisible();
+  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeEnabled();
 
-  const reminder = page.getByRole("status");
-  await expect(reminder.getByText("방금 만든 GIF를 어떻게 사용했는지 알려주세요")).toBeVisible();
-  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeVisible();
+  const reminder = page.getByRole("status").filter({ hasText: "설문에 참여하면 사용횟수 1회를 드려요." });
+  await expect(reminder.getByText("설문에 참여하면 사용횟수 1회를 드려요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeVisible();
   await reminder.getByRole("button", { name: "설문 참여하기" }).click();
   await expect(page.getByRole("dialog").getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
   expect(state.surveyStatusRequests).toBeGreaterThan(1);
@@ -195,5 +188,5 @@ test("shows the non-blocking survey reminder once when starting another composit
   await page.getByRole("button", { name: "나중에" }).click();
   await expect(reminder).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.getByText("설문에 참여하면 사용횟수 1회를 드려요.")).toHaveCount(0);
 });

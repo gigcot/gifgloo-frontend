@@ -8,18 +8,20 @@ type HeaderProps = {
   title?: string;
   showBack?: boolean;
   action?: React.ReactNode;
+  firstExperience?: boolean;
 };
 
-export function Header({ title, showBack, action }: HeaderProps) {
+export function Header({ title, showBack, action, firstExperience = false }: HeaderProps) {
   const router = useRouter();
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0d0d0d]/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-screen-xl flex-wrap items-center gap-3 px-4 py-3">
+    <header className={firstExperience ? "compose-header" : "sticky top-0 z-50 border-b border-white/10 bg-[#0d0d0d]/90 backdrop-blur-md"}>
+      <div className={firstExperience ? "compose-header-inner" : "mx-auto flex max-w-screen-xl flex-wrap items-center gap-3 px-4 py-3"}>
         {showBack && (
           <button
+            aria-label="뒤로 가기"
             onClick={() => runAfterCompositionFeedback(() => window.history.back())}
-            className="rounded-full p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className={firstExperience ? "compose-back" : "rounded-full p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"}
           >
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -33,7 +35,7 @@ export function Header({ title, showBack, action }: HeaderProps) {
             event.preventDefault();
             runAfterCompositionFeedback(() => router.push("/"));
           }}
-          className="shrink-0 text-2xl font-black tracking-tight text-purple-400 transition-colors hover:text-purple-300"
+          className={firstExperience ? "wordmark" : "shrink-0 text-2xl font-black tracking-tight text-purple-400 transition-colors hover:text-purple-300"}
         >
           gifgloo
         </Link>

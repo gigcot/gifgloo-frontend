@@ -1,6 +1,7 @@
 import type { Gif } from "@/entities/gif/model";
 import { getGifUrl } from "@/entities/gif/model";
 import { API_BASE } from "@/shared/lib/api-base";
+import { trackEvent } from "@/shared/lib/umami";
 
 export type Confirmation = {
   code: string;
@@ -24,21 +25,40 @@ type PreparedUpload = {
 
 const preparedUploads = new WeakMap<File, PreparedUpload>();
 
+async function requestStep<T>(phase: string, action: () => Promise<T>): Promise<T> {
+  const started = performance.now();
+  trackEvent("composition_request_step", { phase, status: "started" });
+  try {
+    const result = await action();
+    let status = result instanceof Response && !result.ok ? "error" : "success";
+    if (phase === "submit" && result instanceof Response && result.status === 422) {
+      const body = await result.clone().json().catch(() => null);
+      if (body?.error === "CONFIRMATION_REQUIRED") status = "confirmation_required";
+    }
+    trackEvent("composition_request_step", { phase, status, duration_ms: Math.round(performance.now() - started), ...(result instanceof Response ? { http_status: result.status } : {}) });
+    return result;
+  } catch (error) {
+    trackEvent("composition_request_step", { phase, status: "error", duration_ms: Math.round(performance.now() - started) });
+    throw error;
+  }
+}
+
 async function prepareDirectUpload(
   authFetch: AuthFetch,
   file: File,
 ): Promise<PreparedUpload | SubmitResult> {
   const existing = preparedUploads.get(file);
-  if (existing) return existing;
+  if (existing) { trackEvent("composition_request_step", { phase: "upload", status: "cache_reused" }); return existing; }
 
   const { prepareImageUpload } = await import("@/features/compose/model/prepare-image-upload");
-  const image = await prepareImageUpload(file);
-  const prepareResponse = await authFetch(`${API_BASE}/compositions/uploads`, {
+  const image = await requestStep("prepare_image", () => prepareImageUpload(file));
+  const prepareResponse = await requestStep("prepare_upload", () => authFetch(`${API_BASE}/compositions/uploads`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content_type: image.type, size: image.size }),
-  });
+  }));
   if (!prepareResponse.ok) {
+    if (prepareResponse.status === 401 || prepareResponse.status === 403) return { type: "auth_required" };
     const body = await prepareResponse.json().catch(() => null);
     return {
       type: "error",
@@ -60,11 +80,11 @@ async function prepareDirectUpload(
 
   let uploadResponse: Response;
   try {
-    uploadResponse = await fetch(prepared.upload_url, {
+    uploadResponse = await requestStep("upload", () => fetch(prepared.upload_url, {
       method: "PUT",
       headers: prepared.headers as Record<string, string>,
       body: image,
-    });
+    }));
   } catch {
     return { type: "error", message: "이미지를 업로드하지 못했습니다. 네트워크를 확인해주세요." };
   }
@@ -97,7 +117,7 @@ export async function submitComposition(
     const upload = await prepareDirectUpload(authFetch, photoFile);
     if ("type" in upload) return upload;
 
-    const res = await authFetch(`${API_BASE}/compositions/from-upload`, {
+    const res = await requestStep("submit", () => authFetch(`${API_BASE}/compositions/from-upload`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -105,7 +125,7 @@ export async function submitComposition(
         upload_id: upload.uploadId,
         acknowledge_frame_reduction: confirmed,
       }),
-    });
+    }));
 
     if (!res.ok) {
       const body = await res.json().catch(() => null);
@@ -127,6 +147,7 @@ export async function submitComposition(
       }
 
       if (res.status === 401 || res.status === 403) {
+        preparedUploads.delete(photoFile);
         return { type: "auth_required" };
       }
 

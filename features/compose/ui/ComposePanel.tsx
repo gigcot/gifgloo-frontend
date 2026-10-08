@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Gif } from "@/entities/gif/model";
 import { getGifUrl, safeParseGif } from "@/entities/gif/model";
 import { useAuth } from "@/shared/lib/use-auth";
@@ -12,16 +13,18 @@ import type { Confirmation } from "@/features/compose/model/compose-api";
 import { ShareButton } from "@/shared/ui/ShareButton";
 import { API_BASE } from "@/shared/lib/api-base";
 import { downloadGif } from "@/shared/lib/download";
+import { requestCreditBalanceRefresh } from "@/features/credits/model/use-credits";
 import { GifSearchSheet } from "@/features/gif-search/ui/GifSearchSheet";
 import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
-import { fetchCreditBalance } from "@/features/credits/model/use-credits";
-import { CompositionFeedbackModal } from "@/features/compose/ui/CompositionFeedbackModal";
+import { CompletionNotificationButton } from "./CompletionNotificationButton";
+import { DownloadIcon, ImageIcon, PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
+import { FrameHelp, FrameStatus } from "@/features/gif-search/ui/GifFrameInfo";
+import { inspectGifFrames, useSelectedGifFrame } from "@/features/gif-search/model/use-gif-frames";
 import { submitCompositionFeedback } from "@/features/compose/model/composition-feedback-api";
-import {
-  listenForCompositionFeedbackGuard,
-  runAfterCompositionFeedback,
-} from "@/shared/lib/composition-feedback-guard";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { beginCompositionAttempt, journeyContext } from "@/shared/lib/journey";
+import { ObservedResultImage } from "@/shared/ui/ObservedResultImage";
+import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from "@/features/auth/model/signup-consent";
 import { isSupportedImageFile } from "@/features/compose/model/prepare-image-upload";
 import {
   refreshExp001SurveyStatus,
@@ -32,11 +35,6 @@ import { requestExp001SurveyOpen } from "@/features/experiment/model/exp-001-sur
 type Stage = "ready" | "processing" | "done" | "error";
 type RetrySource = "completed" | "failed";
 
-type UsageSnapshot = {
-  before: number;
-  after: number | null;
-};
-
 type CompositionWait = {
   initialSeconds: number | null;
   confirmed: boolean;
@@ -45,24 +43,25 @@ type CompositionWait = {
 
 export function ComposePanel() {
   const router = useRouter();
-  const { authFetch, userId } = useAuth();
+  const { authFetch, userId, isAnonymous, hasUserSession, consentRequired, ensureSession, refreshAuth } = useAuth();
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [consent, setConsent] = useState({ age: false, terms: false, privacy: false });
+  const consentReady = !consentRequired || (consent.age && consent.terms && consent.privacy);
   const survey = useExp001SurveyStatus();
 
   const [stage, setStage] = useState<Stage>("ready");
   const [gif, setGif] = useState<Gif | null>(null);
+  const [restoredInput, setRestoredInput] = useState(false);
   const [myPhoto, setMyPhoto] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const [showUsageConfirm, setShowUsageConfirm] = useState(false);
   const [showInsufficientPass, setShowInsufficientPass] = useState(false);
   const [showGifSheet, setShowGifSheet] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
   const [compositionWait, setCompositionWait] = useState<CompositionWait | null>(null);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
-  const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
@@ -70,13 +69,42 @@ export function ComposePanel() {
   const [evaluateSurveyReminder, setEvaluateSurveyReminder] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const composingRef = useRef(false);
-  const pendingFeedbackActionRef = useRef<(() => void) | null>(null);
   const retrySourceRef = useRef<RetrySource | null>(null);
   const refreshedSurveyJobRef = useRef<string | null>(null);
+  const previousRequestRef = useRef<{ gifId: string | number; file: File } | null>(null);
+  const lastConsentStateRef = useRef<string | null>(null);
 
   const job = useCompositionJob(jobId);
+  const frame = useSelectedGifFrame(gif);
+
+  const prepareSession = useCallback(async () => {
+    setSessionError(null);
+    try { await ensureSession(); }
+    catch (error) { setSessionError(error instanceof Error ? error.message : "체험 준비에 실패했어요."); }
+  }, [ensureSession]);
+
+  // 서버 세션 준비와 인증 저장소 동기화는 합성 화면 진입 시 필요하다.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void prepareSession(); }, [prepareSession]);
+
+  useEffect(() => {
+    if (restoredInput) trackEventOnce(`compose:${journeyContext().flow_id}:${Boolean(gif)}`, "compose_viewed", { gif_restored: Boolean(gif) });
+  }, [restoredInput, gif]);
+
+  useEffect(() => {
+    if (gif && photoFile) trackEvent("compose_inputs_ready");
+  }, [gif, photoFile]);
+
+  useEffect(() => {
+    if (!hasUserSession) return;
+    const state = `${userId}:${consentRequired}:${consentReady}`;
+    if (lastConsentStateRef.current === state) return;
+    lastConsentStateRef.current = state;
+    trackEvent("compose_consent_state", { required: consentRequired, ready: consentReady });
+  }, [userId, hasUserSession, consentRequired, consentReady]);
 
   const setPhotoFromFile = useCallback((file: File) => {
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
@@ -85,23 +113,19 @@ export function ComposePanel() {
     setPhotoFile(file);
     setMyPhoto(url);
     trackEvent("photo_uploaded", { file_type: file.type || "unknown" });
+    trackEvent("photo_selected", { file_type: file.type || "unknown" });
   }, []);
 
-  // GIF 복원 (로그인 전 선택 → 로그인 후 자동 진입)
+  // 홈에서 선택한 GIF를 합성 화면으로 전달한다.
   useEffect(() => {
     const saved = localStorage.getItem("compose_gif");
-    if (!saved) return;
-    const gif = safeParseGif(saved);
-    if (gif) {
-      const timer = window.setTimeout(() => {
-        setGif(gif);
-        if (localStorage.getItem("compose_gif") === saved) {
-          localStorage.removeItem("compose_gif");
-        }
-      }, 0);
-      return () => window.clearTimeout(timer);
-    }
-    localStorage.removeItem("compose_gif");
+    const restoredGif = saved ? safeParseGif(saved) : null;
+    const timer = window.setTimeout(() => {
+      if (restoredGif) setGif(restoredGif);
+      setRestoredInput(true);
+      if (saved && localStorage.getItem("compose_gif") === saved) localStorage.removeItem("compose_gif");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // 메인 페이지 ComposeBar에서 사진 올리기로 진입한 경우
@@ -127,42 +151,21 @@ export function ComposePanel() {
   }, []);
 
   const visibleStage = job.isComplete ? "done" : job.isFailed ? "error" : stage;
-  const visibleError = job.isFailed ? job.failedReason : error;
-  const displayedUsesBefore = job.creditSettlement
-    ? Math.floor(job.creditSettlement.balanceBefore / 10)
-    : usageSnapshot?.before ?? null;
-  const displayedUsesAfter = job.creditSettlement
-    ? Math.floor(job.creditSettlement.balanceAfter / 10)
-    : usageSnapshot?.after ?? null;
-
   useEffect(() => {
-    if ((visibleStage !== "done" && visibleStage !== "error") || !usageSnapshot || usageSnapshot.after !== null) return;
-
-    let cancelled = false;
-    fetchCreditBalance(authFetch)
-      .then((balance) => {
-        if (cancelled) return;
-        setUsageSnapshot((current) => current ? { ...current, after: balance.remainingUses } : current);
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authFetch, usageSnapshot, visibleStage]);
-
-  useEffect(() => {
-    if (!job.isComplete || !jobId || feedbackSubmitted) return;
-
-    return listenForCompositionFeedbackGuard((event) => {
-      event.preventDefault();
-      pendingFeedbackActionRef.current = event.detail.action;
-      setFeedbackError(null);
-      setShowFeedback(true);
-      trackEvent("composition_feedback_opened");
+    const timer = requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      const heading = mainRef.current?.querySelector<HTMLElement>("h1");
+      if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
     });
-  }, [feedbackSubmitted, job.isComplete, jobId]);
-
+    return () => cancelAnimationFrame(timer);
+  }, [visibleStage]);
+  useEffect(() => {
+    const input = fileInputRef.current;
+    const cancelled = () => trackEvent("photo_picker_cancelled");
+    input?.addEventListener("cancel", cancelled);
+    return () => input?.removeEventListener("cancel", cancelled);
+  }, [visibleStage]);
+  const visibleError = job.isFailed ? job.failedReason : error;
   useEffect(() => {
     if (
       !job.isComplete ||
@@ -180,6 +183,8 @@ export function ComposePanel() {
     if (!evaluateSurveyReminder || !userId) return;
     if (survey.status === "idle" || survey.status === "loading") return;
 
+    // 비동기 설문 조회가 끝나면 브라우저별 1회 노출 상태를 동기화한다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEvaluateSurveyReminder(false);
     if (survey.status !== "done" || !survey.eligible || survey.submitted) return;
 
@@ -189,12 +194,6 @@ export function ComposePanel() {
     setShowSurveyReminder(true);
     trackEvent("exp001_survey_reminder_shown");
   }, [evaluateSurveyReminder, survey, userId]);
-
-  useEffect(() => {
-    if (survey.status === "done" && survey.submitted) {
-      setShowSurveyReminder(false);
-    }
-  }, [survey]);
 
   useEffect(() => {
     if (!compositionWait || compositionWait.initialSeconds === null) return;
@@ -210,6 +209,7 @@ export function ComposePanel() {
   }, [compositionWait]);
 
   function clearPhoto() {
+    trackEvent("photo_removed");
     if (objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current);
       objectUrlRef.current = null;
@@ -223,6 +223,7 @@ export function ComposePanel() {
     if (!file) return;
 
     if (!isSupportedImageFile(file)) {
+      trackEvent("photo_rejected", { reason: "unsupported_type" });
       setFileError("이미지 파일만 업로드할 수 있어요 (JPG, PNG, WebP, HEIC)");
       e.target.value = "";
       return;
@@ -230,10 +231,11 @@ export function ComposePanel() {
 
     setFileError(null);
     setPhotoFromFile(file);
+    e.target.value = "";
   }
 
   async function handleCompose(confirmed = false) {
-    if (!gif || !photoFile) return;
+    if (!gif || !photoFile || !consentReady) return;
     if (composingRef.current) return;
     composingRef.current = true;
 
@@ -242,31 +244,56 @@ export function ComposePanel() {
     setConfirmation(null);
 
     try {
-      const balance = await fetchCreditBalance(authFetch);
-      setUsageSnapshot({ before: balance.remainingUses, after: null });
-    } catch {
-      setUsageSnapshot(null);
+      await ensureSession();
+      if (consentRequired) {
+        trackEvent("compose_consent_save", { status: "started" });
+        let response: Response;
+        try {
+          response = await authFetch(`${API_BASE}/users/me/consents`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ terms_version: CURRENT_TERMS_VERSION, privacy_version: CURRENT_PRIVACY_VERSION, is_fourteen_or_older: consent.age }),
+          });
+        } catch (error) {
+          trackEvent("compose_consent_save", { status: "error", reason: "network" });
+          throw error;
+        }
+        trackEvent("compose_consent_save", { status: response.ok ? "success" : "error", http_status: response.status });
+        if (!response.ok) throw new Error("이용 동의를 저장하지 못했어요. 다시 시도해 주세요.");
+        await refreshAuth();
+      }
+    } catch (error) {
+      composingRef.current = false;
+      setStage("ready");
+      setSessionError(error instanceof Error ? error.message : "체험 준비에 실패했어요.");
+      return;
     }
 
     const result = await submitComposition(authFetch, gif, photoFile, confirmed);
 
     if (result.type === "job") {
-      trackEvent("composition_requested");
+      requestCreditBalanceRefresh();
+      trackEvent("composition_requested", { job_id: result.jobId });
       if (retrySourceRef.current) {
         trackEvent("composition_retried", {
+          job_id: result.jobId,
           from_status: retrySourceRef.current,
+          same_gif: previousRequestRef.current?.gifId === gif.id,
+          same_photo: previousRequestRef.current?.file === photoFile,
+          survey_state: survey.status === "done" ? survey.submitted ? "submitted" : "not_submitted" : "unknown",
         });
         retrySourceRef.current = null;
       }
+      previousRequestRef.current = { gifId: gif.id, file: photoFile };
       setJobId(result.jobId);
     } else if (result.type === "confirmation") {
       composingRef.current = false;
+      trackEvent("composition_frame_confirmation", { action: "opened" });
       setConfirmation(result.confirmation);
       setStage("ready");
     } else if (result.type === "auth_required") {
-      localStorage.setItem("pending_gif", JSON.stringify(gif));
-      localStorage.setItem("pending_action", "compose");
-      router.push("/");
+      composingRef.current = false;
+      setStage("ready");
+      setSessionError("접속 상태를 다시 확인해 주세요. 선택한 GIF와 사진은 유지돼요.");
     } else if (result.type === "insufficient_credit") {
       composingRef.current = false;
       setStage("ready");
@@ -287,11 +314,17 @@ export function ComposePanel() {
     }
   }
 
+  function cancelFrameConfirmation(method: "button" | "backdrop") {
+    trackEvent("composition_frame_confirmation", { action: "cancelled", method });
+    setConfirmation(null);
+  }
+
   function handleReset(source: RetrySource) {
     trackEvent(
       source === "completed"
         ? "composition_restart_clicked"
         : "composition_retry_clicked",
+      jobId ? { job_id: jobId } : undefined,
     );
     retrySourceRef.current = source;
     if (source === "completed" && userId) {
@@ -299,21 +332,16 @@ export function ComposePanel() {
       void refreshExp001SurveyStatus(authFetch, userId);
     }
     composingRef.current = false;
-    clearPhoto();
     setStage("ready");
     setError(null);
     setConfirmation(null);
     setFileError(null);
-    setUsageSnapshot(null);
     setCompositionWait(null);
     setWaitSeconds(null);
     setJobId(null);
-    setShowFeedback(false);
     setFeedbackSubmitted(false);
     setFeedbackSubmitting(false);
     setFeedbackError(null);
-    pendingFeedbackActionRef.current = null;
-    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function handleFeedback(satisfied: boolean) {
@@ -324,24 +352,13 @@ export function ComposePanel() {
 
     try {
       await submitCompositionFeedback(authFetch, jobId, satisfied);
-      trackEvent("composition_feedback_submitted", { satisfied });
+      trackEvent("composition_feedback_submitted", { satisfied, job_id: jobId });
       setFeedbackSubmitted(true);
-      setShowFeedback(false);
-      const pendingAction = pendingFeedbackActionRef.current;
-      pendingFeedbackActionRef.current = null;
-      pendingAction?.();
     } catch {
       setFeedbackError("응답을 저장하지 못했어요. 다시 눌러주세요.");
     } finally {
       setFeedbackSubmitting(false);
     }
-  }
-
-  function closeFeedbackModal() {
-    if (feedbackSubmitting) return;
-    trackEvent("composition_feedback_skipped");
-    pendingFeedbackActionRef.current = null;
-    setShowFeedback(false);
   }
 
   function goPurchaseFromCompose() {
@@ -357,22 +374,28 @@ export function ComposePanel() {
 
   return (
     <>
-    <main className="mx-auto max-w-screen-xl px-4 py-6">
+    <main ref={mainRef}>
 
       {/* ── 준비 상태 ── */}
       {visibleStage === "ready" && (
-        <div className="mx-auto flex max-w-3xl flex-col gap-5">
-          {showSurveyReminder && (
+        <div className={`compose-content${myPhoto ? " has-photo" : ""}`}>
+          <h1>어떤 사진을 넣어볼까요?</h1>
+          <p className="compose-guidance">대상이 잘 보이는 사진을 골라주세요.</p>
+          {!hasUserSession && !sessionError && <p role="status" className="text-sm text-white/50">체험을 준비하고 있어요. 먼저 사진을 골라도 좋아요.</p>}
+          {sessionError && <div role="alert" className="text-sm text-red-300">
+            <p>{sessionError}</p><button onClick={() => void prepareSession()} className="mt-2 underline">접속 다시 확인</button>
+          </div>}
+          {showSurveyReminder && !(survey.status === "done" && survey.submitted) && (
             <div
               role="status"
               className="flex flex-col gap-3 rounded-2xl border border-purple-400/25 bg-purple-500/10 p-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div>
                 <p className="text-sm font-bold text-purple-100">
-                  방금 만든 GIF를 어떻게 사용했는지 알려주세요
+                  설문에 참여하면 사용횟수 1회를 드려요.
                 </p>
                 <p className="mt-1 text-xs leading-5 text-white/45">
-                  짧은 설문에 답하면 7일 동안 쓸 수 있는 이용권 1회를 드려요.
+                  지급 후 7일 동안 사용할 수 있어요.
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -396,121 +419,39 @@ export function ComposePanel() {
               </div>
             </div>
           )}
-          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 rounded-3xl border border-white/10 bg-[#111113] p-3 shadow-2xl sm:p-4">
-            {/* 선택한 GIF */}
-            <div className="flex flex-1 flex-col gap-1.5">
-              <p className="text-xs font-semibold text-white/45">선택한 GIF</p>
-              <button
-                onClick={() => setShowGifSheet(true)}
-                className="aspect-square w-full overflow-hidden rounded-xl border border-white/10 bg-black transition-colors hover:border-purple-400/50"
-              >
-                {gif ? (
-                  <img src={getGifUrl(gif, "md")} alt="selected gif" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-white/60">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm font-semibold text-white/50">GIF 검색</p>
-                  </div>
-                )}
-              </button>
+          <div className="compose-gif">
+            {gif && <img src={getGifUrl(gif, "md")} alt="selected gif" />}
+            <div><p>선택한 GIF</p><h2>{gif?.title || "GIF를 골라주세요"}</h2>
+              {gif && <div className="selected-frame"><FrameStatus frame={frame} /><FrameHelp count={frame?.status === "ready" ? frame.count : undefined} compact />
+                {frame?.status === "error" && <button className="frame-retry" onClick={() => inspectGifFrames(gif, true)}>다시 확인</button>}
+              </div>}
             </div>
-
-            {/* + 아이콘 */}
-            <div className="flex items-center">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/40">
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-            </div>
-
-            {/* 내 사진 */}
-            <div className="flex flex-1 flex-col gap-1.5">
-              <p className="text-xs font-semibold text-white/45">내 사진</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              {myPhoto ? (
-                <div className="relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-black">
-                  <img src={myPhoto} alt="my photo" className="h-full w-full object-cover" />
-                  <button
-                    onClick={clearPhoto}
-                    className="absolute right-2 top-2 rounded-full border border-white/10 bg-black/70 p-1 text-white backdrop-blur-sm hover:bg-black"
-                  >
-                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-black transition-colors hover:border-purple-400/60 hover:bg-purple-500/10"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-white/60">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
-                  <p className="text-sm font-semibold text-white/50">사진 올리기</p>
-                </button>
-              )}
-            </div>
+            <button className="text-action" onClick={() => setShowGifSheet(true)}>{gif ? "바꾸기" : "GIF 고르기"}</button>
           </div>
-
-          {fileError && (
-            <p className="text-center text-sm text-red-400">{fileError}</p>
-          )}
-
-          <button
-            onClick={() => setShowUsageConfirm(true)}
-            disabled={!myPhoto || !gif}
-            className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white shadow-lg shadow-purple-950/40 transition-all hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            합성하기
-          </button>
-        </div>
-      )}
-
-      {/* ── 합성 이용권 사용 안내 모달 ── */}
-      {showUsageConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setShowUsageConfirm(false)}
-        >
-          <div
-            className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-[#111113] p-8 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-center text-base font-bold text-white">이용권 1회를 사용할까요?</p>
-            <p className="text-center text-sm leading-6 text-white/50">
-              GIF 합성 이용권 1회가 사용된 뒤<br />AI 합성 작업이 바로 시작됩니다.<br />통상 2~3분 내 결과물이 제공됩니다.
-            </p>
-            <p className="rounded-xl bg-white/[0.04] px-4 py-3 text-center text-xs leading-5 text-white/45">
-              작업 시작 후에는 중도 취소 기능을 제공하지 않으며, 단순 변심에 의한 이용 횟수 복구 및 환불이 제한됩니다.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowUsageConfirm(false)}
-                className="flex-1 rounded-full border border-white/20 py-3 text-sm font-medium text-white/60 transition-colors hover:border-white/40 hover:text-white"
-              >
-                취소
-              </button>
-              <button
-                onClick={() => { setShowUsageConfirm(false); handleCompose(); }}
-                className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
-              >
-                시작하기
-              </button>
-            </div>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" aria-label="합성할 사진" />
+          {myPhoto ? <>
+            <div className="photo-heading-row"><h2>넣은 사진</h2><div className="photo-actions">
+              <button className="text-action" onClick={() => { trackEvent("photo_change_clicked"); fileInputRef.current?.click(); }}>바꾸기</button>
+              <span aria-hidden="true">|</span><button className="text-action" onClick={clearPhoto}>삭제</button>
+            </div></div>
+            <div className="photo-preview"><img src={myPhoto} alt="my photo"
+              onLoad={() => trackEvent("photo_preview_loaded")} onError={() => trackEvent("photo_preview_failed")} /></div>
+          </> : <div className="photo-empty"><ImageIcon aria-hidden="true" /><button className="photo-pick"
+              onClick={() => { trackEvent("photo_picker_opened"); fileInputRef.current?.click(); }}>사진 고르기</button></div>}
+          {fileError && <p className="photo-error" role="alert">{fileError}</p>}
+          <Link href="/privacy" target="_blank" className="text-action photo-policy">사진 처리 안내</Link>
+          {consentRequired && <fieldset className="consent-inline">
+            <legend className="px-1">처음 이용할 때 한 번 확인해요</legend>
+            <label className="consent-all"><input type="checkbox" checked={consent.age && consent.terms && consent.privacy}
+              onChange={event => setConsent({ age: event.target.checked, terms: event.target.checked, privacy: event.target.checked })} />전체 동의</label>
+            <label><input type="checkbox" checked={consent.age} onChange={event => setConsent({ ...consent, age: event.target.checked })} />[필수] 만 14세 이상</label>
+            <label><input type="checkbox" checked={consent.terms} onChange={event => setConsent({ ...consent, terms: event.target.checked })} /><span>[필수] <Link href="/terms" target="_blank">이용약관</Link> 동의</span></label>
+            <label><input type="checkbox" checked={consent.privacy} onChange={event => setConsent({ ...consent, privacy: event.target.checked })} /><span>[필수] <Link href="/privacy" target="_blank">개인정보처리방침</Link> 동의</span></label>
+          </fieldset>}
+          <div className="compose-submit">
+            <button onClick={() => { beginCompositionAttempt(); trackEvent("compose_clicked"); void handleCompose(); }}
+              disabled={!myPhoto || !gif || !hasUserSession || !consentReady} className="make-button">만들기</button>
+            <p>{isAnonymous ? "무료 1회 사용" : "1회 사용"} · 약 2~3분</p>
           </div>
         </div>
       )}
@@ -526,7 +467,7 @@ export function ComposePanel() {
           >
             <p className="text-center text-base font-bold text-white">사용 가능한 이용권이 없어요</p>
             <p className="text-center text-sm leading-6 text-white/50">
-              합성을 시작하려면 GIF 합성 이용권이 필요합니다.<br />5회 이용권을 구매하시겠어요?
+              {isAnonymous ? "지금 만든 결과는 계속 저장하거나 공유할 수 있어요. 설문 참여 대상이라면 응답 후 1회를 더 받을 수 있어요. 가입해도 무료 횟수가 다시 지급되지는 않아요." : <>합성을 시작하려면 GIF 합성 이용권이 필요합니다.<br />5회 이용권을 구매하시겠어요?</>}
             </p>
             <div className="flex gap-2">
               <button
@@ -535,12 +476,15 @@ export function ComposePanel() {
               >
                 나중에
               </button>
-              <button
+              {!isAnonymous && <button
                 onClick={goPurchaseFromCompose}
                 className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
               >
                 이용권 구매
-              </button>
+              </button>}
+              {isAnonymous && survey.status === "done" && survey.eligible && !survey.submitted && <button
+                onClick={() => { setShowInsufficientPass(false); requestExp001SurveyOpen(); }}
+                className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white">설문 참여하기</button>}
             </div>
           </div>
         </div>
@@ -550,7 +494,7 @@ export function ComposePanel() {
       {confirmation && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setConfirmation(null)}
+          onClick={() => cancelFrameConfirmation("backdrop")}
         >
           <div
             className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-[#111113] p-8 shadow-2xl"
@@ -559,13 +503,13 @@ export function ComposePanel() {
             <p className="text-center text-base font-bold text-white">{confirmation.message}</p>
             <div className="flex gap-2">
               <button
-                onClick={() => setConfirmation(null)}
+                onClick={() => cancelFrameConfirmation("button")}
                 className="flex-1 rounded-full border border-white/20 py-3 text-sm font-medium text-white/60 transition-colors hover:border-white/40 hover:text-white"
               >
                 취소
               </button>
               <button
-                onClick={() => { setConfirmation(null); handleCompose(true); }}
+                onClick={() => { trackEvent("composition_frame_confirmation", { action: "confirmed" }); setConfirmation(null); handleCompose(true); }}
                 className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500"
               >
                 네, 진행할게요
@@ -649,123 +593,43 @@ export function ComposePanel() {
         </div>
       )}
 
-      {/* ── 처리 중 ── */}
       {visibleStage === "processing" && (
-        <div className="flex flex-col items-center gap-8 py-16">
-          {/* GIF + 내 사진 미리보기 */}
-          <div className="flex items-center gap-3">
-            <div className="h-28 w-28 overflow-hidden rounded-2xl ring-2 ring-purple-500/40">
-              {gif && <img src={getGifUrl(gif, "md")} alt="gif" className="h-full w-full object-cover" />}
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <div className="h-0.5 w-8 animate-pulse rounded-full bg-purple-500" />
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="animate-spin text-purple-400">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              <div className="h-0.5 w-8 animate-pulse rounded-full bg-purple-500" />
-            </div>
-            <div className="h-28 w-28 overflow-hidden rounded-2xl ring-2 ring-purple-500/40">
-              {myPhoto && <img src={myPhoto} alt="my photo" className="h-full w-full object-cover" />}
-            </div>
+        <div className="waiting-content">
+          <div className="waiting-materials">
+            {gif && <img src={getGifUrl(gif, "md")} alt="선택한 GIF" />}
+            <PlusIcon aria-hidden="true" />{myPhoto && <img src={myPhoto} alt="my photo" />}
           </div>
-
-          {/* 진행 바 */}
-          <div className="w-full max-w-xs">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-purple-500 transition-[width] duration-700 ease-out"
-                style={{ width: `${job.progress}%` }}
-              />
-            </div>
-          </div>
-
-          <p className="text-sm text-white/40">{job.statusMessage}</p>
+          <UpdateIcon className="waiting-spinner" aria-hidden="true" />
+          <h1 aria-live="polite">{jobId ? "GIF를 만들고 있어요" : "사진을 보내고 있어요"}</h1>
+          <p className="waiting-estimate">{jobId ? "약 2~3분 걸려요" : "접수가 끝날 때까지 이 화면을 유지해주세요."}</p>
+          {job.connectionLost && <p role="status" className="mt-4 px-4 text-sm text-white/70">진행 상태를 다시 연결하고 있어요. 접수된 작업은 ‘내 결과’에서도 확인할 수 있어요.</p>}
+          {jobId && <><CompletionNotificationButton key={jobId} jobId={jobId} />
+            <p className="waiting-return">다른 화면을 보고 와도 괜찮아요.<br />이 브라우저의 ‘내 결과’에서 확인할 수 있어요.</p>
+          </>}
         </div>
       )}
 
-      {/* ── 완료 ── */}
       {visibleStage === "done" && job.resultUrl && (
-        <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6">
-          <div className="w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
-            <img src={job.resultUrl} alt="합성 결과" className="w-full object-contain" />
+        <div className="completed-content">
+          <h1>완성됐어요!</h1>
+          <div className="completed-media">
+            <ObservedResultImage src={job.resultUrl} jobId={jobId!} assetId={job.resultAssetId!} source="composition_result" className="w-full object-contain" />
           </div>
-
-          <div className="w-full rounded-2xl border border-white/10 bg-[#111113] p-4">
-            <p className="text-center text-sm font-semibold text-white/75">
-              {feedbackSubmitted ? "평가해 주셔서 감사해요" : "결과물이 마음에 드나요?"}
-            </p>
-            {!feedbackSubmitted && (
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => void handleFeedback(false)}
-                  disabled={feedbackSubmitting}
-                  className="rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white disabled:opacity-40"
-                >
-                  아쉬워요
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleFeedback(true)}
-                  disabled={feedbackSubmitting}
-                  className="rounded-full bg-purple-600 py-3 text-sm font-bold text-white transition-colors hover:bg-purple-500 disabled:opacity-40"
-                >
-                  만족해요
-                </button>
-              </div>
-            )}
-            {feedbackError && (
-              <p role="alert" className="mt-3 text-center text-xs text-red-300">{feedbackError}</p>
-            )}
+          <div className="result-actions">
+            <button className="result-save" disabled={!job.resultAssetId} onClick={() => {
+              if (job.resultAssetId) downloadGif(`${API_BASE}/assets/${job.resultAssetId}/download`, "composition_result", job.resultAssetId);
+            }}><DownloadIcon aria-hidden="true" />GIF 저장</button>
+            <ShareButton assetId={job.resultAssetId ?? undefined} analyticsSource="composition_result" className="result-copy" />
           </div>
-
-          <div className="flex w-full flex-col gap-3">
-            <button
-              onClick={() => runAfterCompositionFeedback(() => {
-                if (!job.resultAssetId) return;
-                downloadGif(
-                  `${API_BASE}/assets/${job.resultAssetId}/download`,
-                  "composition_result",
-                );
-              })}
-              disabled={!job.resultAssetId}
-              className="w-full rounded-full bg-purple-600 py-4 text-base font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500"
-            >
-              다운로드
-            </button>
-            <div className="flex gap-2">
-              <ShareButton
-                assetId={job.resultAssetId ?? undefined}
-                analyticsSource="composition_result"
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
-              />
-              <button
-                onClick={() => runAfterCompositionFeedback(() => handleReset("completed"))}
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
-              >
-                다시 만들기
-              </button>
-            </div>
-          </div>
-
-          {displayedUsesBefore !== null && (
-            <div className="grid w-full grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-[#111113] p-4 text-center">
-              <div>
-                <p className="text-xs text-white/40">사용 전</p>
-                <p className="mt-1 font-bold text-white">{displayedUsesBefore.toLocaleString()}회</p>
-              </div>
-              <div className="border-x border-white/10">
-                <p className="text-xs text-white/40">이번 합성</p>
-                <p className="mt-1 font-bold text-purple-300">-1회</p>
-              </div>
-              <div>
-                <p className="text-xs text-white/40">남은 이용권</p>
-                <p className="mt-1 font-bold text-white">
-                  {displayedUsesAfter === null ? "확인 중" : `${displayedUsesAfter.toLocaleString()}회`}
-                </p>
-              </div>
-            </div>
-          )}
+          <button className="result-redo" onClick={() => handleReset("completed")}><UpdateIcon aria-hidden="true" />다시 만들기</button>
+          <section className="result-feedback" aria-labelledby="rating-title">
+            <h2 id="rating-title">{feedbackSubmitted ? "평가해 주셔서 감사해요" : "결과는 어땠나요?"}</h2>
+            {!feedbackSubmitted && <div className="rating-options" role="group" aria-labelledby="rating-title">
+              <button disabled={feedbackSubmitting} onClick={() => void handleFeedback(false)}>아쉬워요</button>
+              <button disabled={feedbackSubmitting} onClick={() => void handleFeedback(true)}>만족해요</button>
+            </div>}
+            {feedbackError && <p role="alert" className="mt-3 text-sm text-red-300">{feedbackError}</p>}
+          </section>
         </div>
       )}
 
@@ -796,19 +660,11 @@ export function ComposePanel() {
 
     {showGifSheet && (
       <GifSearchSheet
-        onSelect={(selected) => { setGif(selected); setShowGifSheet(false); }}
+        onSelect={(selected) => { trackEvent("gif_selection_changed", { action: gif ? "changed" : "selected", source: "compose_search" }); setGif(selected); setShowGifSheet(false); }}
         onClose={() => setShowGifSheet(false)}
       />
     )}
 
-    {showFeedback && jobId && job.resultUrl && (
-      <CompositionFeedbackModal
-        submitting={feedbackSubmitting}
-        error={feedbackError}
-        onSelect={(satisfied) => void handleFeedback(satisfied)}
-        onClose={closeFeedbackModal}
-      />
-    )}
     </>
   );
 }
