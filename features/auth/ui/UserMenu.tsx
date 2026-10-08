@@ -34,6 +34,8 @@ export function UserMenu() {
 
   async function handleLogout() {
     await authFetch(`${API_BASE}/oauth/logout`, { method: "POST" });
+    // 로그아웃 시 메모리의 인증·이용량 캐시도 초기화해야 한다.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = "/";
   }
 
