@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/shared/lib/api-base";
 import { trackEventOnce } from "@/shared/lib/umami";
+import { requestCreditBalanceRefresh } from "@/features/credits/model/use-credits";
 
 type ProcessingStage =
   | "EXTRACTING_FRAMES"
@@ -44,6 +45,7 @@ export type CompositionJobState = {
   creditRestored: boolean;
   creditSettlement: CreditSettlement | null;
   failedReason: string | null;
+  connectionLost: boolean;
 };
 
 const STAGE_INFO: Record<ProcessingStage, { message: string; progress: number }> = {
@@ -64,6 +66,7 @@ const IDLE: CompositionJobState = {
   creditRestored: false,
   creditSettlement: null,
   failedReason: null,
+  connectionLost: false,
 };
 
 const WAITING: CompositionJobState = {
@@ -131,14 +134,16 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
 
       if (data.status === "PROCESSING" && data.stage) {
         const { message, progress } = STAGE_INFO[data.stage];
-        updateState((current) => ({ ...current, statusMessage: message, progress }));
+        updateState((current) => ({ ...current, statusMessage: message, progress, connectionLost: false }));
         return;
       }
 
       if (data.status === "COMPLETED" && data.result_url) {
+        requestCreditBalanceRefresh();
         trackEventOnce(
           `composition_completed:${activeJobId}`,
           "composition_completed",
+          { job_id: activeJobId },
         );
         setSnapshot({
           jobId: activeJobId,
@@ -152,6 +157,7 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
             creditRestored: false,
             creditSettlement: parseCreditSettlement(data.credit_settlement),
             failedReason: null,
+            connectionLost: false,
           },
         });
         es.close();
@@ -159,10 +165,11 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
       }
 
       if (data.status === "FAILED") {
+        requestCreditBalanceRefresh();
         trackEventOnce(
           `composition_failed:${activeJobId}`,
           "composition_failed",
-          { stage: data.stage ?? "unknown" },
+          { job_id: activeJobId, stage: data.stage ?? "unknown" },
         );
         const creditSettlement = parseCreditSettlement(data.credit_settlement);
         updateState((current) => ({
@@ -179,12 +186,8 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
     es.onerror = () => {
       updateState((current) => ({
         ...current,
-        isFailed: true,
-        creditRestored: false,
-        creditSettlement: null,
-        failedReason: "서버 연결이 끊어졌어요. 작업 상태는 내 결과물에서 확인해주세요.",
+        connectionLost: true,
       }));
-      es.close();
     };
 
     return () => {

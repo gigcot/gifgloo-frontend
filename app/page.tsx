@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/shared/ui/Header";
-import { TrendingShowcase } from "@/features/gif-search/ui/TrendingShowcase";
+import { HeroExamples } from "@/features/gif-search/ui/HeroExamples";
+import { CategoryPicker } from "@/features/gif-search/ui/CategoryPicker";
+import { FrameHelp } from "@/features/gif-search/ui/GifFrameInfo";
+import type { GifCategory } from "@/shared/api/klipy";
 import { SearchBar } from "@/features/gif-search/ui/SearchBar";
 import { GifGrid } from "@/features/gif-search/ui/GifGrid";
 import { ComposeBar } from "@/features/compose/ui/ComposeBar";
@@ -14,12 +17,15 @@ import type { Gif } from "@/entities/gif/model";
 import { safeParseGif } from "@/entities/gif/model";
 import { fetchTrendingPage } from "@/shared/api/klipy";
 import { useAuth } from "@/shared/lib/use-auth";
+import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { journeyContext } from "@/shared/lib/journey";
 
 export default function Home() {
   const router = useRouter();
-  const { isLoggedIn, checked, checkAuth } = useAuth();
+  const { isLoggedIn, checked } = useAuth();
   const [selectedGif, setSelectedGif] = useState<Gif | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [category, setCategory] = useState<GifCategory | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [trendingGifs, setTrendingGifs] = useState<Gif[]>([]);
@@ -28,6 +34,40 @@ export default function Home() {
   const [trendingHasMore, setTrendingHasMore] = useState(false);
   const [trendingLoadingMore, setTrendingLoadingMore] = useState(false);
   const trendingLoadingMoreRef = useRef(false);
+
+  useEffect(() => {
+    const flowId = journeyContext().flow_id;
+    trackEventOnce(`home:${flowId}`, "home_viewed");
+    const firstAction = (event: Event) => {
+      trackEventOnce(`home_action:${flowId}`, "home_first_action", { action: event.type });
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) trackEventOnce(`home_section:${flowId}:${(entry.target as HTMLElement).dataset.journeySection}`, "home_section_viewed", { section: (entry.target as HTMLElement).dataset.journeySection! });
+      }
+    });
+    document.querySelectorAll("[data-journey-section]").forEach((element) => observer.observe(element));
+    const mediaEvent = (event: Event) => {
+      if (!(event.target instanceof HTMLImageElement || event.target instanceof HTMLVideoElement)) return;
+      const section = event.target.closest<HTMLElement>("[data-journey-section]")?.dataset.journeySection;
+      if (section) trackEventOnce(`home_media:${flowId}:${section}:${event.type}`, event.type === "error" ? "home_media_failed" : "home_media_loaded", { section });
+    };
+    document.addEventListener("pointerdown", firstAction, { once: true });
+    document.addEventListener("keydown", firstAction, { once: true });
+    window.addEventListener("scroll", firstAction, { once: true });
+    document.addEventListener("load", mediaEvent, true);
+    document.addEventListener("loadeddata", mediaEvent, true);
+    document.addEventListener("error", mediaEvent, true);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("pointerdown", firstAction);
+      document.removeEventListener("keydown", firstAction);
+      window.removeEventListener("scroll", firstAction);
+      document.removeEventListener("load", mediaEvent, true);
+      document.removeEventListener("loadeddata", mediaEvent, true);
+      document.removeEventListener("error", mediaEvent, true);
+    };
+  }, []);
 
   useEffect(() => {
     fetchTrendingPage(1, 24)
@@ -71,17 +111,9 @@ export default function Home() {
     }
   }, [checked, isLoggedIn, router]);
 
-  async function goCompose(gif?: Gif) {
+  function goCompose(gif?: Gif) {
     const gifToUse = gif ?? selectedGif;
-    const loggedIn = await checkAuth();
-    if (!loggedIn) {
-      localStorage.setItem("pending_action", "compose");
-      if (gifToUse) {
-        localStorage.setItem("pending_gif", JSON.stringify(gifToUse));
-      }
-      setShowLogin(true);
-      return;
-    }
+    trackEvent("make_intent", { source: gif ? "featured" : "gif_list", gif_selected: Boolean(gifToUse) });
     if (gifToUse) {
       localStorage.setItem("compose_gif", JSON.stringify(gifToUse));
     }
@@ -113,25 +145,24 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white">
-      <Header action={<HeaderActions onLogin={() => setShowLogin(true)} />} />
-      <TrendingShowcase gifs={trendingGifs.slice(0, 7)} onCompose={goCompose} />
-
-      <div className="border-b border-white/10 bg-[#111113] px-4 py-5">
-        <div className="mx-auto max-w-screen-xl">
-          <p className="text-lg font-semibold text-white">합성할 GIF를 찾아보세요</p>
-          <p className="mt-1 text-sm text-white/40">마음에 드는 GIF를 선택하고 내 사진과 합성해봐요</p>
+    <div className="first-experience min-h-screen">
+      <Header firstExperience={!isLoggedIn} action={<HeaderActions compact={!isLoggedIn} onLogin={() => setShowLogin(true)} />} />
+      <HeroExamples />
+      <main id="chooser" tabIndex={-1} data-journey-section="gif_list" className="chooser">
+        <h2>어떤 GIF로 만들어볼까요?</h2>
+        <SearchBar value={searchQuery} onChange={value => { setSearchQuery(value); setCategory(null); }} />
+        <div className="category-toolbar" role="group" aria-label="GIF 탐색">
+          <button className="popular-category" aria-pressed={!searchQuery && !category} onClick={() => { setSearchQuery(""); setCategory(null); }}>인기</button>
+          <CategoryPicker selected={category} onSelect={item => { setCategory(item); setSearchQuery(""); }} />
         </div>
-      </div>
-
-      <SearchBar value={searchQuery} onChange={setSearchQuery} />
-
-      <main className={`mx-auto max-w-screen-xl px-4 py-4 ${selectedGif ? "pb-28" : ""}`}>
-        {trendingError && trendingGifs.length === 0 && !searchQuery ? (
+        <div className="gif-list-heading"><h3>{searchQuery ? "검색 결과" : `${category?.label ?? "인기"} GIF`}</h3><FrameHelp /></div>
+        <p className="frame-inspection-hint"><span className="desktop-gesture">마우스를 올리면 프레임 수를 볼 수 있어요.</span><span className="touch-gesture">길게 누르면 프레임 수를 볼 수 있어요.</span></p>
+        {trendingError && trendingGifs.length === 0 && !searchQuery && !category ? (
           <p className="py-12 text-center text-white/40">GIF를 불러오지 못했어요. 새로고침해 주세요.</p>
         ) : (
           <GifGrid
-            query={searchQuery}
+            query={category?.query ?? searchQuery}
+            source={category ? "category" : searchQuery ? "search" : "trending"}
             trendingGifs={trendingGifs}
             trendingHasMore={trendingHasMore}
             trendingLoadingMore={trendingLoadingMore}
@@ -142,7 +173,10 @@ export default function Home() {
         )}
       </main>
 
-      <ComposeBar selectedGif={selectedGif} onCompose={goCompose} />
+      <ComposeBar selectedGif={selectedGif} onCompose={goCompose} onClear={() => {
+        trackEvent("gif_selection_changed", { action: "cleared", source: category ? "category" : searchQuery ? "search" : "trending", control: "selection_bar" });
+        setSelectedGif(null);
+      }} />
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} pendingGif={selectedGif} />}
       {showWelcome && <NewUserWelcomeModal onClose={() => setShowWelcome(false)} />}
     </div>

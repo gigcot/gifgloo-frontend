@@ -4,8 +4,8 @@ import { ComposePanel } from "@/features/compose/ui/ComposePanel";
 
 export default function ComposePage() {
   return (
-    <div className="min-h-screen bg-[#0d0d0d] text-white">
-      <Header title="합성하기" showBack action={<HeaderActions />} />
+    <div className="first-experience min-h-screen">
+      <Header firstExperience showBack action={<HeaderActions compact />} />
       <ComposePanel />
     </div>
   );
