@@ -97,6 +97,10 @@ async function openCompletedComposition(
     })}\n\n`,
   }));
   await page.route("http://localhost:8000/compositions/feedback-e2e-job/feedback", async (route) => {
+    if (route.request().method() === "GET") return route.fulfill({
+      json: { satisfied: state.feedback[0] ?? null }, headers: API_CORS_HEADERS,
+    });
+    if (state.feedback.length) return route.fulfill({ status: 409, headers: API_CORS_HEADERS });
     const body = route.request().postDataJSON() as { satisfied: boolean };
     state.feedback.push(body.satisfied);
     await route.fulfill({ status: 204, headers: API_CORS_HEADERS });

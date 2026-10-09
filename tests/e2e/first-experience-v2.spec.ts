@@ -28,7 +28,7 @@ async function setup(page: Page, permission: "granted" | "denied" = "granted", r
     if (pathname === "/compositions/job-v2") return route.fulfill({ json: { status: "COMPLETED", result_url: assets + "dog-result-still.png", result_asset_id: "result-v2" } });
     if (pathname === "/compositions") return route.fulfill({ json: { jobs: [] } });
     if (pathname === "/assets/result-v2/share") return route.fulfill({ json: { share_token: "shared-v2" } });
-    if (pathname === "/compositions/job-v2/feedback") return route.fulfill({ status: 204 });
+    if (pathname === "/compositions/job-v2/feedback") return route.fulfill(request.method() === "GET" ? { json: { satisfied: null } } : { status: 204 });
     return route.fulfill({ status: 500, json: { message: "Unexpected test endpoint" } });
   });
   await page.route("**/api/gif?**", route => {
@@ -180,7 +180,7 @@ test("unsupported notification is explained without permission prompt or subscri
   await page.addInitScript(() => { Reflect.deleteProperty(window, "PushManager"); });
   await compose(page);
   await page.getByRole("button", { name: "만들기", exact: true }).click();
-  await page.getByRole("button", { name: "완료되면 알림 받기" }).click();
+  await expect(page.getByRole("button", { name: "알림 사용 불가" })).toBeDisabled();
   await expect(page.getByText(/이 기기·브라우저에서는 알림을 지원하지 않아요/)).toBeVisible();
   expect(state.subscriptions).toBe(0);
   expect(await page.evaluate(() => (window as unknown as { testState: { permissions: number } }).testState.permissions)).toBe(0);
@@ -188,6 +188,7 @@ test("unsupported notification is explained without permission prompt or subscri
 
 test("status disconnection is not reported as synthesis failure and can recover", async ({ page }) => {
   await setup(page);
+  await page.route("http://localhost:8000/compositions/job-v2", route => route.fulfill({ json: { status: "PROCESSING", stage: null } }));
   await compose(page);
   await page.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "GIF를 만들고 있어요" })).toBeVisible();
@@ -196,4 +197,15 @@ test("status disconnection is not reported as synthesis failure and can recover"
   await expect(page.getByRole("heading", { name: "작업에 실패했습니다" })).toHaveCount(0);
   await page.evaluate(() => (window as unknown as { testState: { complete: () => void } }).testState.complete());
   await expect(page.getByRole("heading", { name: "완성됐어요!" })).toBeVisible();
+});
+
+test("disabled server notification is visible before clicking and never requests permission", async ({ page }) => {
+  const state = await setup(page);
+  await page.route("http://localhost:8000/web-push/config", route => route.fulfill({ json: { enabled: false, public_key: null } }));
+  await compose(page);
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await expect(page.getByRole("button", { name: "알림 사용 불가" })).toBeDisabled();
+  await expect(page.getByText(/완료 알림을 아직 사용할 수 없어요/)).toBeVisible();
+  expect(state.subscriptions).toBe(0);
+  expect(await page.evaluate(() => (window as unknown as { testState: { permissions: number } }).testState.permissions)).toBe(0);
 });

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMyCompositions } from "@/features/compositions/model/use-my-compositions";
 import { CompositionDetailModal } from "@/features/compositions/ui/CompositionDetailModal";
 import type { CompositionJob } from "@/features/compositions/model/types";
+import { trackEvent } from "@/shared/lib/umami";
 
 function StatusBadge({ status }: { status: CompositionJob["status"] }) {
   if (status === "COMPLETED") return null;
@@ -11,7 +13,7 @@ function StatusBadge({ status }: { status: CompositionJob["status"] }) {
     <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60">
       <div className="flex items-center gap-1.5">
         <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-400" />
-        <span className="text-xs font-semibold text-white/80">처리 중</span>
+        <span className="text-xs font-semibold text-white/80">{status === "FAILED" ? "실패 · 상세 확인" : "처리 중 · 이어 보기"}</span>
       </div>
     </div>
   );
@@ -29,7 +31,8 @@ function Banner() {
 
 export function MyAssetsPage() {
   const state = useMyCompositions();
-  const [selected, setSelected] = useState<CompositionJob | null>(null);
+  const router = useRouter();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (state.status === "loading") {
     return (
@@ -62,14 +65,24 @@ export function MyAssetsPage() {
     );
   }
 
+  const selectedJob = state.jobs.find(job => job.job_id === selectedId);
+
   return (
     <>
       <Banner />
+      {state.refreshFailed && <p role="status" className="p-4 text-center text-sm text-white/70">최신 상태를 다시 확인하고 있어요. 아래는 마지막으로 확인한 목록이에요.</p>}
       <div className="mx-auto grid max-w-2xl grid-cols-3 gap-1 pt-1">
         {state.jobs.map((job) => (
-          <div
+          <button type="button"
             key={job.job_id}
-            onClick={() => setSelected(job)}
+            aria-label={job.status === "COMPLETED" ? "완성된 GIF 보기" : job.status === "FAILED" ? "실패한 작업 확인" : "진행 중인 작업 이어 보기"}
+            onClick={() => {
+              if (job.status === "COMPLETED") setSelectedId(job.job_id);
+              else {
+                trackEvent("composition_resume_clicked", { job_id: job.job_id, status: job.status });
+                router.push(`/compose?job=${encodeURIComponent(job.job_id)}`);
+              }
+            }}
             className="relative aspect-square cursor-pointer overflow-hidden transition-opacity hover:opacity-80"
           >
             <img
@@ -78,12 +91,12 @@ export function MyAssetsPage() {
               className="h-full w-full object-cover"
             />
             <StatusBadge status={job.status} />
-          </div>
+          </button>
         ))}
       </div>
 
-      {selected && (
-        <CompositionDetailModal job={selected} onClose={() => setSelected(null)} />
+      {selectedJob && (
+        <CompositionDetailModal job={selectedJob} onClose={() => setSelectedId(null)} />
       )}
     </>
   );

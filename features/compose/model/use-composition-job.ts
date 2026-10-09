@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/shared/lib/api-base";
-import { trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
 import { requestCreditBalanceRefresh } from "@/features/credits/model/use-credits";
+import { useAuth } from "@/shared/lib/use-auth";
 
 type ProcessingStage =
   | "EXTRACTING_FRAMES"
@@ -46,6 +47,7 @@ export type CompositionJobState = {
   creditSettlement: CreditSettlement | null;
   failedReason: string | null;
   connectionLost: boolean;
+  accessError: string | null;
 };
 
 const STAGE_INFO: Record<ProcessingStage, { message: string; progress: number }> = {
@@ -67,6 +69,7 @@ const IDLE: CompositionJobState = {
   creditSettlement: null,
   failedReason: null,
   connectionLost: false,
+  accessError: null,
 };
 
 const WAITING: CompositionJobState = {
@@ -76,6 +79,7 @@ const WAITING: CompositionJobState = {
 };
 
 type JobSnapshot = {
+  ownerId: string;
   jobId: string;
   state: CompositionJobState;
 };
@@ -100,35 +104,41 @@ function parseCreditSettlement(value: RawCreditSettlement | null | undefined): C
 }
 
 export function useCompositionJob(jobId: string | null): CompositionJobState {
+  const { userId, checked, authFetch } = useAuth();
   const [snapshot, setSnapshot] = useState<JobSnapshot | null>(null);
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId || !checked || !userId) return;
     const activeJobId = jobId;
+    const ownerId = userId;
+    const controller = new AbortController();
+    let ended = false;
+    let checking = false;
+    let observedStatus: RawJobStatus["status"] | null = null;
 
-    const es = new EventSource(`${API_BASE}/compositions/${activeJobId}/status`, {
+    const es = new EventSource(`${API_BASE}/compositions/${encodeURIComponent(activeJobId)}/status`, {
       withCredentials: true,
     });
 
     function updateState(
       update: (current: CompositionJobState) => CompositionJobState,
     ) {
+      if (controller.signal.aborted) return;
       setSnapshot((current) => ({
+        ownerId,
         jobId: activeJobId,
-        state: update(current?.jobId === activeJobId ? current.state : WAITING),
+        state: update(current?.jobId === activeJobId && current.ownerId === ownerId ? current.state : WAITING),
       }));
     }
 
-    es.onmessage = (ev) => {
-      let data: RawJobStatus;
-      try {
-        data = JSON.parse(ev.data);
-      } catch {
-        return;
+    function applyStatus(data: RawJobStatus) {
+      if (controller.signal.aborted || ended) return;
+      if (["PENDING", "PROCESSING", "COMPLETED", "FAILED"].includes(data.status) && observedStatus !== data.status) {
+        observedStatus = data.status;
+        trackEvent("composition_job_status_viewed", { job_id: activeJobId, status: data.status });
       }
-
       if (data.status === "PENDING") {
-        setSnapshot({ jobId: activeJobId, state: WAITING });
+        setSnapshot({ ownerId, jobId: activeJobId, state: WAITING });
         return;
       }
 
@@ -146,6 +156,7 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
           { job_id: activeJobId },
         );
         setSnapshot({
+          ownerId,
           jobId: activeJobId,
           state: {
             progress: 100,
@@ -158,8 +169,10 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
             creditSettlement: parseCreditSettlement(data.credit_settlement),
             failedReason: null,
             connectionLost: false,
+            accessError: null,
           },
         });
+        ended = true;
         es.close();
         return;
       }
@@ -179,22 +192,45 @@ export function useCompositionJob(jobId: string | null): CompositionJobState {
           creditSettlement,
           failedReason: "작업에 실패했습니다. 다시 시도해주세요.",
         }));
+        ended = true;
         es.close();
       }
+    }
+
+    es.onmessage = (ev) => {
+      let data: RawJobStatus;
+      try { data = JSON.parse(ev.data); }
+      catch { return; }
+      applyStatus(data);
     };
 
-    es.onerror = () => {
+    es.onerror = async () => {
+      if (controller.signal.aborted || ended || checking) return;
       updateState((current) => ({
         ...current,
         connectionLost: true,
       }));
+      checking = true;
+      try {
+        const response = await authFetch(`${API_BASE}/compositions/${encodeURIComponent(activeJobId)}`, { signal: controller.signal, cache: "no-store" });
+        if (controller.signal.aborted || ended) return;
+        if ([401, 403, 404].includes(response.status)) {
+          updateState(() => ({ ...IDLE, accessError: "이 작업에 접근할 수 없어요. 결과를 만든 계정·브라우저인지 확인해주세요." }));
+          ended = true;
+          es.close();
+        } else if (response.ok) applyStatus(await response.json());
+      } catch {
+        if (!controller.signal.aborted) updateState(current => ({ ...current, connectionLost: true }));
+      } finally { checking = false; }
     };
 
     return () => {
+      controller.abort();
       es.close();
     };
-  }, [jobId]);
+  }, [jobId, checked, userId, authFetch]);
 
   if (!jobId) return IDLE;
-  return snapshot?.jobId === jobId ? snapshot.state : WAITING;
+  if (checked && !userId) return { ...IDLE, accessError: "결과를 만든 브라우저의 접속 정보가 없어요. 같은 계정·브라우저인지 확인해주세요." };
+  return snapshot?.jobId === jobId && snapshot.ownerId === userId ? snapshot.state : WAITING;
 }

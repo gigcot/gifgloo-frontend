@@ -11,9 +11,11 @@ import { trackEvent } from "@/shared/lib/umami";
 type Props = {
   query: string;
   source?: string;
+  surface?: "home" | "compose";
   trendingGifs: Gif[];
   trendingHasMore?: boolean;
   trendingLoadingMore?: boolean;
+  trendingError?: boolean;
   selectedId: string | null;
   onSelect: (gif: Gif) => void;
   onLoadMoreTrending?: () => void;
@@ -22,9 +24,11 @@ type Props = {
 export function GifGrid({
   query,
   source = query ? "search" : "trending",
+  surface = "home",
   trendingGifs,
   trendingHasMore = false,
   trendingLoadingMore = false,
+  trendingError = false,
   selectedId,
   onSelect,
   onLoadMoreTrending,
@@ -49,16 +53,17 @@ export function GifGrid({
     const element = listRef.current;
     if (!element) return;
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) { trackEvent("gif_list_viewed", { source, count: gifs.length }); observer.disconnect(); }
+      if (entry.isIntersecting) { trackEvent("gif_list_viewed", { source, surface, count: gifs.length }); observer.disconnect(); }
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [query, gifs.length, source]);
+  }, [query, gifs.length, source, surface]);
 
   function selectGif(gif: Gif) {
+    if (surface === "compose" && selectedId === gif.id) { onSelect(gif); return; }
     const action = selectedId === gif.id ? "cleared" : selectedId ? "changed" : "selected";
-    if (action !== "cleared") trackEvent("gif_selected", { source });
-    trackEvent("gif_selection_changed", { action, source, control: "gif_tile" });
+    if (action !== "cleared") trackEvent("gif_selected", { source, surface });
+    trackEvent("gif_selection_changed", { action, source, surface, control: "gif_tile" });
     onSelect(gif);
   }
 
@@ -67,11 +72,13 @@ export function GifGrid({
     const bucket = Math.floor(4 * target.scrollTop / Math.max(1, target.scrollHeight - target.clientHeight));
     if (bucket !== scrollBucket.current) {
       scrollBucket.current = bucket;
-      trackEvent("gif_list_scrolled", { source, depth_quarter: bucket });
+      trackEvent("gif_list_scrolled", { source, surface, depth_quarter: bucket });
     }
-    const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-    if (distanceFromBottom > 600 || loadingMore || !hasMore) return;
+  }
 
+  function loadMore() {
+    if (loadingMore || !hasMore) return;
+    trackEvent("gif_load_more_clicked", { source, surface, count: gifs.length });
     if (query) {
       loadMoreSearch();
     } else {
@@ -80,6 +87,7 @@ export function GifGrid({
   }
 
   function handleWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (surface === "compose") return;
     const footer = document.querySelector("footer");
     const footerVisible = footer ? footer.getBoundingClientRect().top < window.innerHeight : false;
 
@@ -89,9 +97,9 @@ export function GifGrid({
     }
   }
 
-  if (loading || (!query && trendingGifs.length === 0)) {
+  if (loading || (!query && trendingGifs.length === 0 && trendingLoadingMore)) {
     return (
-      <div className="h-[72vh] overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-2">
+      <div data-testid="gif-results" className={`${surface === "compose" ? "min-h-0 flex-1" : "h-[72vh]"} overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-2`}>
         <div className="gif-grid">
         {Array.from({ length: 12 }).map((_, i) => (
           <div
@@ -105,9 +113,12 @@ export function GifGrid({
     );
   }
 
-  if (searchError && gifs.length === 0) {
+  if ((query ? searchError : trendingError) && gifs.length === 0) {
     return (
-      <p className="py-12 text-center text-white/40">검색 중 오류가 발생했어요. 다시 시도해 주세요.</p>
+      <div role="status" className="py-12 text-center text-white/60">GIF를 불러오지 못했어요.
+        {!query && <button className="block mx-auto mt-4 rounded-full border border-white/30 px-6 py-3" onClick={loadMore}>다시 불러오기</button>}
+        {query && <p>검색어를 바꿔 다시 시도해주세요.</p>}
+      </div>
     );
   }
 
@@ -122,7 +133,8 @@ export function GifGrid({
       ref={listRef}
       onScroll={handleScroll}
       onWheel={handleWheel}
-      className="h-[72vh] overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-2 pr-1 [scrollbar-color:rgba(255,255,255,0.24)_transparent] [scrollbar-width:thin]"
+      data-testid="gif-results"
+      className={`${surface === "compose" ? "min-h-0 flex-1" : "h-[72vh]"} overflow-y-auto rounded-2xl border border-white/10 bg-black/20 p-2 pr-1 [scrollbar-color:rgba(255,255,255,0.24)_transparent] [scrollbar-width:thin]`}
     >
       <div className="gif-grid">
         {gifs.map((gif) => (
@@ -130,9 +142,13 @@ export function GifGrid({
             frame={frames.get(getGifUrl(gif, "hd"))} onInspect={inspect} onSelect={selectGif} />
         ))}
       </div>
-      {loadingMore && (
-        <p className="py-4 text-center text-sm text-white/35">GIF 더 불러오는 중</p>
-      )}
+      {hasMore && <div className="py-5 text-center">
+        {(query ? searchError : trendingError) && <p role="status" className="mb-3 text-sm text-white/70">더 불러오지 못했어요. 현재 목록은 유지돼요.</p>}
+        <button type="button" onClick={loadMore} disabled={loadingMore}
+          className="rounded-full border border-purple-300 px-8 py-3 font-semibold text-white disabled:opacity-50">
+          {loadingMore ? "불러오는 중…" : (query ? searchError : trendingError) ? "다시 불러오기" : "더 보기"}
+        </button>
+      </div>}
       {!hasMore && gifs.length > 0 && (
         <p className="py-4 text-center text-xs text-white/25">마지막 GIF까지 봤어요</p>
       )}
