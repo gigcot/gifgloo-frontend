@@ -7,6 +7,8 @@ import { downloadGif } from "@/shared/lib/download";
 import { ShareButton } from "@/shared/ui/ShareButton";
 import { ObservedResultImage } from "@/shared/ui/ObservedResultImage";
 import { useAuth } from "@/shared/lib/use-auth";
+import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
+import { Exp001SurveyInvitation } from "@/features/experiment/ui/Exp001SurveyInvitation";
 
 type Props = {
   job: CompositionJob;
@@ -145,6 +147,11 @@ export function CompositionDetailModal({ job, onClose }: Props) {
             />
           </div>
         )}
+
+        {job.status === "COMPLETED" && <>
+          <CompositionFeedback jobId={job.job_id} source="my_assets" />
+          <Exp001SurveyInvitation source="my_assets" onOpen={onClose} />
+        </>}
 
         <div>
           <p className="mb-2 text-xs font-semibold text-white/40">사용한 재료</p>

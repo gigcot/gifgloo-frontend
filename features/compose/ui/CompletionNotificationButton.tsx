@@ -50,11 +50,13 @@ export function CompletionNotificationButton({ jobId }: { jobId: string }) {
     return () => { current = false; clearTimeout(timeout); };
   }, [authFetch]);
 
+  useEffect(() => {
+    if (unavailable) trackEvent("completion_notification_unavailable", { job_id: jobId });
+  }, [unavailable, jobId]);
+
   async function subscribe() {
-    if (busyRef.current || subscribed) return;
+    if (busyRef.current || subscribed || unavailable || !setup) return;
     trackEvent("completion_notification_clicked", { job_id: jobId });
-    if (unavailable) { setMessage(unavailable); trackEvent("completion_notification_unavailable", { job_id: jobId }); return; }
-    if (!setup) { setMessage("알림을 준비 중이에요. 잠시 후 다시 눌러주세요."); return; }
     busyRef.current = true;
     setBusy(true);
     setMessage("");
@@ -83,14 +85,14 @@ export function CompletionNotificationButton({ jobId }: { jobId: string }) {
   }
 
   return <div className="notification-control">
-    <button className="notification-button" disabled={busy || subscribed || (!setup && !unavailable)} onClick={() => void subscribe()}
+    <button className="notification-button" disabled={busy || subscribed || !setup || Boolean(unavailable)} onClick={() => void subscribe()}
       onMouseEnter={() => setTooltip(true)} onMouseLeave={() => setTooltip(false)}
       onFocus={() => setTooltip(true)} onBlur={() => setTooltip(false)}
       onKeyDown={event => { if (event.key === "Escape") setTooltip(false); }}
       aria-describedby={tooltip ? "notification-compatibility" : undefined}>
-      <BellIcon aria-hidden="true" />{subscribed ? "알림을 받을게요" : busy ? "알림 신청 중…" : "완료되면 알림 받기"}
+      <BellIcon aria-hidden="true" />{subscribed ? "알림을 받을게요" : busy ? "알림 신청 중…" : unavailable ? "알림 사용 불가" : !setup ? "알림 준비 중…" : "완료되면 알림 받기"}
     </button>
     {tooltip && <div className="notification-tooltip-area"><p className="notification-tooltip" role="tooltip" id="notification-compatibility">일부 기기·브라우저에서는 지원되지 않을 수 있어요.</p></div>}
-    <p className="notification-message" role="status">{message}</p>
+    <p className="notification-message" role="status">{message || unavailable}</p>
   </div>;
 }

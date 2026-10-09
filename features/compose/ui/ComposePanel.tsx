@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Gif } from "@/entities/gif/model";
 import { getGifUrl, safeParseGif } from "@/entities/gif/model";
@@ -20,7 +20,7 @@ import { CompletionNotificationButton } from "./CompletionNotificationButton";
 import { DownloadIcon, ImageIcon, PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { FrameHelp, FrameStatus } from "@/features/gif-search/ui/GifFrameInfo";
 import { inspectGifFrames, useSelectedGifFrame } from "@/features/gif-search/model/use-gif-frames";
-import { submitCompositionFeedback } from "@/features/compose/model/composition-feedback-api";
+import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
 import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
 import { beginCompositionAttempt, journeyContext } from "@/shared/lib/journey";
 import { ObservedResultImage } from "@/shared/ui/ObservedResultImage";
@@ -43,6 +43,8 @@ type CompositionWait = {
 
 export function ComposePanel() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get("job");
   const { authFetch, userId, isAnonymous, hasUserSession, consentRequired, ensureSession, refreshAuth } = useAuth();
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [consent, setConsent] = useState({ age: false, terms: false, privacy: false });
@@ -54,7 +56,6 @@ export function ComposePanel() {
   const [restoredInput, setRestoredInput] = useState(false);
   const [myPhoto, setMyPhoto] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [showInsufficientPass, setShowInsufficientPass] = useState(false);
@@ -62,9 +63,6 @@ export function ComposePanel() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [compositionWait, setCompositionWait] = useState<CompositionWait | null>(null);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
-  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
-  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
-  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [showSurveyReminder, setShowSurveyReminder] = useState(false);
   const [evaluateSurveyReminder, setEvaluateSurveyReminder] = useState(false);
 
@@ -76,6 +74,8 @@ export function ComposePanel() {
   const refreshedSurveyJobRef = useRef<string | null>(null);
   const previousRequestRef = useRef<{ gifId: string | number; file: File } | null>(null);
   const lastConsentStateRef = useRef<string | null>(null);
+  const entryJobRef = useRef(jobId);
+  const resumedOwnerRef = useRef<string | null>(null);
 
   const job = useCompositionJob(jobId);
   const frame = useSelectedGifFrame(gif);
@@ -88,11 +88,19 @@ export function ComposePanel() {
 
   // 서버 세션 준비와 인증 저장소 동기화는 합성 화면 진입 시 필요하다.
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void prepareSession(); }, [prepareSession]);
+  useEffect(() => { if (!jobId) void prepareSession(); }, [prepareSession, jobId]);
 
   useEffect(() => {
-    if (restoredInput) trackEventOnce(`compose:${journeyContext().flow_id}:${Boolean(gif)}`, "compose_viewed", { gif_restored: Boolean(gif) });
-  }, [restoredInput, gif]);
+    if (restoredInput && !jobId) trackEventOnce(`compose:${journeyContext().flow_id}:${Boolean(gif)}`, "compose_viewed", { gif_restored: Boolean(gif) });
+  }, [restoredInput, gif, jobId]);
+
+  useEffect(() => {
+    if (!jobId || entryJobRef.current !== jobId || !hasUserSession) return;
+    const ownerJob = `${userId}:${jobId}`;
+    if (resumedOwnerRef.current === ownerJob) return;
+    resumedOwnerRef.current = ownerJob;
+    trackEvent("composition_resume_opened", { job_id: jobId });
+  }, [jobId, userId, hasUserSession]);
 
   useEffect(() => {
     if (gif && photoFile) trackEvent("compose_inputs_ready");
@@ -118,6 +126,7 @@ export function ComposePanel() {
 
   // 홈에서 선택한 GIF를 합성 화면으로 전달한다.
   useEffect(() => {
+    if (jobId) return;
     const saved = localStorage.getItem("compose_gif");
     const restoredGif = saved ? safeParseGif(saved) : null;
     const timer = window.setTimeout(() => {
@@ -126,10 +135,11 @@ export function ComposePanel() {
       if (saved && localStorage.getItem("compose_gif") === saved) localStorage.removeItem("compose_gif");
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [jobId]);
 
   // 메인 페이지 ComposeBar에서 사진 올리기로 진입한 경우
   useEffect(() => {
+    if (jobId) return;
     let cancelled = false;
 
     getPendingPhoto().then((file) => {
@@ -141,7 +151,7 @@ export function ComposePanel() {
     return () => {
       cancelled = true;
     };
-  }, [setPhotoFromFile]);
+  }, [setPhotoFromFile, jobId]);
 
   // object URL 컴포넌트 언마운트 시 정리
   useEffect(() => {
@@ -150,7 +160,7 @@ export function ComposePanel() {
     };
   }, []);
 
-  const visibleStage = job.isComplete ? "done" : job.isFailed ? "error" : stage;
+  const visibleStage = job.isComplete ? "done" : job.isFailed || job.accessError ? "error" : jobId ? "processing" : stage;
   useEffect(() => {
     const timer = requestAnimationFrame(() => {
       window.scrollTo(0, 0);
@@ -165,7 +175,7 @@ export function ComposePanel() {
     input?.addEventListener("cancel", cancelled);
     return () => input?.removeEventListener("cancel", cancelled);
   }, [visibleStage]);
-  const visibleError = job.isFailed ? job.failedReason : error;
+  const visibleError = job.accessError ?? (job.isFailed ? job.failedReason : error);
   useEffect(() => {
     if (
       !job.isComplete ||
@@ -284,7 +294,7 @@ export function ComposePanel() {
         retrySourceRef.current = null;
       }
       previousRequestRef.current = { gifId: gif.id, file: photoFile };
-      setJobId(result.jobId);
+      router.replace(`/compose?job=${encodeURIComponent(result.jobId)}`, { scroll: false });
     } else if (result.type === "confirmation") {
       composingRef.current = false;
       trackEvent("composition_frame_confirmation", { action: "opened" });
@@ -319,8 +329,8 @@ export function ComposePanel() {
     setConfirmation(null);
   }
 
-  function handleReset(source: RetrySource) {
-    trackEvent(
+  function handleReset(source: RetrySource | null) {
+    if (source) trackEvent(
       source === "completed"
         ? "composition_restart_clicked"
         : "composition_retry_clicked",
@@ -338,27 +348,7 @@ export function ComposePanel() {
     setFileError(null);
     setCompositionWait(null);
     setWaitSeconds(null);
-    setJobId(null);
-    setFeedbackSubmitted(false);
-    setFeedbackSubmitting(false);
-    setFeedbackError(null);
-  }
-
-  async function handleFeedback(satisfied: boolean) {
-    if (!jobId || feedbackSubmitting || feedbackSubmitted) return;
-
-    setFeedbackSubmitting(true);
-    setFeedbackError(null);
-
-    try {
-      await submitCompositionFeedback(authFetch, jobId, satisfied);
-      trackEvent("composition_feedback_submitted", { satisfied, job_id: jobId });
-      setFeedbackSubmitted(true);
-    } catch {
-      setFeedbackError("응답을 저장하지 못했어요. 다시 눌러주세요.");
-    } finally {
-      setFeedbackSubmitting(false);
-    }
+    router.replace("/compose", { scroll: false });
   }
 
   function goPurchaseFromCompose() {
@@ -426,7 +416,10 @@ export function ComposePanel() {
                 {frame?.status === "error" && <button className="frame-retry" onClick={() => inspectGifFrames(gif, true)}>다시 확인</button>}
               </div>}
             </div>
-            <button className="text-action" onClick={() => setShowGifSheet(true)}>{gif ? "바꾸기" : "GIF 고르기"}</button>
+            <button className="text-action" onClick={event => {
+              event.currentTarget.focus({ preventScroll: true });
+              setShowGifSheet(true);
+            }}>{gif ? "바꾸기" : "GIF 고르기"}</button>
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" aria-label="합성할 사진" />
           {myPhoto ? <>
@@ -595,15 +588,15 @@ export function ComposePanel() {
 
       {visibleStage === "processing" && (
         <div className="waiting-content">
-          <div className="waiting-materials">
+          {(gif || myPhoto) && <div className="waiting-materials">
             {gif && <img src={getGifUrl(gif, "md")} alt="선택한 GIF" />}
             <PlusIcon aria-hidden="true" />{myPhoto && <img src={myPhoto} alt="my photo" />}
-          </div>
+          </div>}
           <UpdateIcon className="waiting-spinner" aria-hidden="true" />
           <h1 aria-live="polite">{jobId ? "GIF를 만들고 있어요" : "사진을 보내고 있어요"}</h1>
           <p className="waiting-estimate">{jobId ? "약 2~3분 걸려요" : "접수가 끝날 때까지 이 화면을 유지해주세요."}</p>
           {job.connectionLost && <p role="status" className="mt-4 px-4 text-sm text-white/70">진행 상태를 다시 연결하고 있어요. 접수된 작업은 ‘내 결과’에서도 확인할 수 있어요.</p>}
-          {jobId && <><CompletionNotificationButton key={jobId} jobId={jobId} />
+          {jobId && <><CompletionNotificationButton key={`${userId}:${jobId}`} jobId={jobId} />
             <p className="waiting-return">다른 화면을 보고 와도 괜찮아요.<br />이 브라우저의 ‘내 결과’에서 확인할 수 있어요.</p>
           </>}
         </div>
@@ -622,14 +615,7 @@ export function ComposePanel() {
             <ShareButton assetId={job.resultAssetId ?? undefined} analyticsSource="composition_result" className="result-copy" />
           </div>
           <button className="result-redo" onClick={() => handleReset("completed")}><UpdateIcon aria-hidden="true" />다시 만들기</button>
-          <section className="result-feedback" aria-labelledby="rating-title">
-            <h2 id="rating-title">{feedbackSubmitted ? "평가해 주셔서 감사해요" : "결과는 어땠나요?"}</h2>
-            {!feedbackSubmitted && <div className="rating-options" role="group" aria-labelledby="rating-title">
-              <button disabled={feedbackSubmitting} onClick={() => void handleFeedback(false)}>아쉬워요</button>
-              <button disabled={feedbackSubmitting} onClick={() => void handleFeedback(true)}>만족해요</button>
-            </div>}
-            {feedbackError && <p role="alert" className="mt-3 text-sm text-red-300">{feedbackError}</p>}
-          </section>
+          {jobId && <CompositionFeedback jobId={jobId} source="composition_result" />}
         </div>
       )}
 
@@ -637,7 +623,7 @@ export function ComposePanel() {
       {visibleStage === "error" && (
         <div className="mx-auto flex max-w-lg flex-col items-center gap-6 py-16 text-center">
           <div>
-            <h2 className="text-lg font-bold text-white">작업에 실패했습니다</h2>
+            <h1 className="text-lg font-bold text-white">{job.accessError ? "작업을 확인할 수 없어요" : "작업에 실패했습니다"}</h1>
             <p className="mt-2 text-sm text-red-300">{visibleError}</p>
           </div>
           {job.creditRestored && (
@@ -649,10 +635,10 @@ export function ComposePanel() {
             </div>
           )}
           <button
-            onClick={() => handleReset("failed")}
+            onClick={() => handleReset(job.accessError ? null : "failed")}
             className="rounded-full border border-white/20 px-8 py-3 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:text-white"
           >
-            다시 시도
+            {job.accessError ? "새로 만들기" : "다시 시도"}
           </button>
         </div>
       )}
@@ -660,7 +646,8 @@ export function ComposePanel() {
 
     {showGifSheet && (
       <GifSearchSheet
-        onSelect={(selected) => { trackEvent("gif_selection_changed", { action: gif ? "changed" : "selected", source: "compose_search" }); setGif(selected); setShowGifSheet(false); }}
+        selectedId={gif?.id ?? null}
+        onSelect={(selected) => { setGif(selected); setShowGifSheet(false); }}
         onClose={() => setShowGifSheet(false)}
       />
     )}

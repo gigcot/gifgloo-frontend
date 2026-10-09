@@ -72,10 +72,10 @@ function mapPage(json: KlipyResponse): GifPageResult {
   };
 }
 
-export async function fetchTrendingPage(page = 1, perPage = 24): Promise<GifPageResult> {
+export async function fetchTrendingPage(page = 1, perPage = 24, signal?: AbortSignal): Promise<GifPageResult> {
   const cid = getCustomerId();
   const res = await fetch(
-    `/api/gif?type=trending&customer_id=${cid}&page=${page}&per_page=${perPage}`
+    `/api/gif?type=trending&customer_id=${cid}&page=${page}&per_page=${perPage}`, { signal }
   );
   if (!res.ok) throw new Error(`Klipy trending error: ${res.status}`);
   const json = await res.json();
