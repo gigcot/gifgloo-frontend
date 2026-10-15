@@ -204,9 +204,9 @@ test("mobile anonymous input and account-link explanation remain usable", async 
 test("direct compose entry is not classified as a home funnel", async ({ page }) => {
   await setup(page);
   await page.goto("/compose");
-  await expect(page.getByText("처음 이용할 때 한 번 확인해요")).toBeVisible();
+  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
+  await expect.poll(async () => (await recordedEvents(page, "compose_viewed"))[0]?.flow_origin).toBe("direct_compose");
   const events = await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")) as { name: string; data: Record<string, unknown> }[];
-  expect(events.find((event) => event.name === "compose_viewed")?.data.flow_origin).toBe("direct_compose");
   expect(events.some((event) => event.name === "home_viewed")).toBe(false);
 });
 

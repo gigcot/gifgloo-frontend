@@ -9,6 +9,8 @@
 
 이번 코드에서 단위 테스트 28개, TypeScript (`--noEmit --incremental false`), 전체 ESLint, Webpack 운영 빌드, `git diff --check`가 통과했다. 로컬 기본 Turbopack 빌드는 PostCSS 처리 중 내부 포트 생성이 환경에서 금지되어 실패했다. GitHub CI의 기본 빌드·전체 E2E와 운영 배포 결과는 PR/Actions에서 확인한다. 실제 유료 합성·외부 메시징 앱 전달 검증은 이번 준비 단계에서 실행하지 않았다.
 
+GitHub PR #18 첫 CI(run 38700676104)에서 기본 Turbopack 빌드·ESLint·단위 테스트 28개가 통과했다. E2E는 81개 통과·1개 건너뜀·1개 실패였으며, 실패는 직접 `/compose` 진입 시 사진 선택 전에도 동의 문구가 보인다고 가정한 이전 테스트였다. 준비 상태를 현재 화면의 ‘사진 고르기’ 버튼으로 확인하고, 원래 목적이던 `compose_viewed.flow_origin=direct_compose`를 이벤트 도착까지 기다려 검증하도록 수정했다. 제품 동작은 변경하지 않았으며 수정 후 전체 CI 결과는 PR에서 확인한다. 건너뛴 항목은 별도 설정이 필요한 운영 Umami 수집 테스트다.
+
 아래 기록은 각 이전 작업 시점의 상태이며 위 배포 준비와 구분한다.
 
 ---
