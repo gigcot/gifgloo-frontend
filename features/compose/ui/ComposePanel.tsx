@@ -7,23 +7,19 @@ import type { Gif } from "@/entities/gif/model";
 import { getGifUrl, safeParseGif } from "@/entities/gif/model";
 import { useAuth } from "@/shared/lib/use-auth";
 import { useCompositionJob } from "@/features/compose/model/use-composition-job";
-import { clearPendingPhoto, getPendingPhoto } from "@/features/compose/model/pending-photo";
+import { clearPendingPhoto, getPendingPhoto, setPendingPhoto } from "@/features/compose/model/pending-photo";
 import { submitComposition } from "@/features/compose/model/compose-api";
 import type { Confirmation } from "@/features/compose/model/compose-api";
-import { ShareButton } from "@/shared/ui/ShareButton";
+import { ResultMedia } from "@/features/compositions/ui/ResultMedia";
+import resultStyles from "@/features/compositions/ui/ResultMedia.module.css";
 import { API_BASE } from "@/shared/lib/api-base";
-import { downloadGif } from "@/shared/lib/download";
 import { requestCreditBalanceRefresh } from "@/features/credits/model/use-credits";
-import { GifSearchSheet } from "@/features/gif-search/ui/GifSearchSheet";
 import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
 import { CompletionNotificationButton } from "./CompletionNotificationButton";
-import { DownloadIcon, ImageIcon, PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
-import { FrameHelp, FrameStatus } from "@/features/gif-search/ui/GifFrameInfo";
-import { inspectGifFrames, useSelectedGifFrame } from "@/features/gif-search/model/use-gif-frames";
+import { CrossCircledIcon, ImageIcon, PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
 import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
 import { beginCompositionAttempt, journeyContext } from "@/shared/lib/journey";
-import { ObservedResultImage } from "@/shared/ui/ObservedResultImage";
 import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from "@/features/auth/model/signup-consent";
 import { isSupportedImageFile } from "@/features/compose/model/prepare-image-upload";
 import {
@@ -31,6 +27,7 @@ import {
   useExp001SurveyStatus,
 } from "@/features/experiment/model/exp-001-survey";
 import { requestExp001SurveyOpen } from "@/features/experiment/model/exp-001-survey-open";
+import styles from "./ComposePanel.module.css";
 
 type Stage = "ready" | "processing" | "done" | "error";
 type RetrySource = "completed" | "failed";
@@ -59,7 +56,8 @@ export function ComposePanel() {
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [showInsufficientPass, setShowInsufficientPass] = useState(false);
-  const [showGifSheet, setShowGifSheet] = useState(false);
+  const [leavingForBrowse, setLeavingForBrowse] = useState(false);
+  const [browseError, setBrowseError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [compositionWait, setCompositionWait] = useState<CompositionWait | null>(null);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
@@ -78,7 +76,6 @@ export function ComposePanel() {
   const resumedOwnerRef = useRef<string | null>(null);
 
   const job = useCompositionJob(jobId);
-  const frame = useSelectedGifFrame(gif);
 
   const prepareSession = useCallback(async () => {
     setSessionError(null);
@@ -120,8 +117,6 @@ export function ComposePanel() {
     objectUrlRef.current = url;
     setPhotoFile(file);
     setMyPhoto(url);
-    trackEvent("photo_uploaded", { file_type: file.type || "unknown" });
-    trackEvent("photo_selected", { file_type: file.type || "unknown" });
   }, []);
 
   // 홈에서 선택한 GIF를 합성 화면으로 전달한다.
@@ -137,7 +132,6 @@ export function ComposePanel() {
     return () => window.clearTimeout(timer);
   }, [jobId]);
 
-  // 메인 페이지 ComposeBar에서 사진 올리기로 진입한 경우
   useEffect(() => {
     if (jobId) return;
     let cancelled = false;
@@ -241,7 +235,25 @@ export function ComposePanel() {
 
     setFileError(null);
     setPhotoFromFile(file);
+    trackEvent("photo_uploaded", { file_type: file.type || "unknown" });
+    trackEvent("photo_selected", { file_type: file.type || "unknown" });
     e.target.value = "";
+  }
+
+  async function changeGif() {
+    if (leavingForBrowse) return;
+    setLeavingForBrowse(true);
+    setBrowseError(null);
+    try {
+      if (photoFile) await setPendingPhoto(photoFile);
+      if (gif) localStorage.setItem("compose_gif", JSON.stringify(gif));
+    } catch {
+      setBrowseError("선택한 사진을 보관하지 못했어요. 다시 눌러주세요.");
+      setLeavingForBrowse(false);
+      return;
+    }
+    router.push("/?browse=1", { scroll: false });
+    setLeavingForBrowse(false);
   }
 
   async function handleCompose(confirmed = false) {
@@ -368,13 +380,7 @@ export function ComposePanel() {
 
       {/* ── 준비 상태 ── */}
       {visibleStage === "ready" && (
-        <div className={`compose-content${myPhoto ? " has-photo" : ""}`}>
-          <h1>어떤 사진을 넣어볼까요?</h1>
-          <p className="compose-guidance">대상이 잘 보이는 사진을 골라주세요.</p>
-          {!hasUserSession && !sessionError && <p role="status" className="text-sm text-white/50">체험을 준비하고 있어요. 먼저 사진을 골라도 좋아요.</p>}
-          {sessionError && <div role="alert" className="text-sm text-red-300">
-            <p>{sessionError}</p><button onClick={() => void prepareSession()} className="mt-2 underline">접속 다시 확인</button>
-          </div>}
+        <div className={styles.content}>
           {showSurveyReminder && !(survey.status === "done" && survey.submitted) && (
             <div
               role="status"
@@ -409,42 +415,65 @@ export function ComposePanel() {
               </div>
             </div>
           )}
-          <div className="compose-gif">
-            {gif && <img src={getGifUrl(gif, "md")} alt="selected gif" />}
-            <div><p>선택한 GIF</p><h2>{gif?.title || "GIF를 골라주세요"}</h2>
-              {gif && <div className="selected-frame"><FrameStatus frame={frame} /><FrameHelp count={frame?.status === "ready" ? frame.count : undefined} compact />
-                {frame?.status === "error" && <button className="frame-retry" onClick={() => inspectGifFrames(gif, true)}>다시 확인</button>}
+          <h1 className="sr-only">GIF 합성</h1>
+          <div className={styles.ingredients}>
+            <div className={styles.source} role="group" aria-label="선택한 원본 GIF">
+              <div className={styles.caption}>
+                <h2>{gif ? "원본 GIF" : "GIF를 골라주세요"}</h2>
+                <button type="button" className={styles.textAction} disabled={leavingForBrowse} onClick={() => void changeGif()}>{gif ? "바꾸기" : "GIF 고르기"}</button>
+              </div>
+              <div className={styles.sourceMedia}>
+                {gif ? <img src={getGifUrl(gif, "md")} alt="selected gif" /> : <ImageIcon aria-hidden="true" />}
+              </div>
+              {browseError && <p className={styles.error} role="alert">{browseError}</p>}
+            </div>
+            <section className={styles.photoSection} aria-labelledby="compose-photo-title">
+              <div className={styles.caption}>
+                <h2 id="compose-photo-title">{myPhoto ? "넣은 사진" : "사진을 넣어보세요"}</h2>
+                {myPhoto && <div className={styles.photoActions}>
+                  <button type="button" className={styles.textAction} disabled={leavingForBrowse} onClick={() => {
+                    trackEvent("photo_change_clicked"); fileInputRef.current?.click();
+                  }}>바꾸기</button>
+                  <button type="button" className={styles.removePhoto} disabled={leavingForBrowse} aria-label="사진 삭제" onClick={clearPhoto}><CrossCircledIcon aria-hidden="true" /></button>
+                </div>}
+              </div>
+              <input ref={fileInputRef} type="file" accept="image/*" disabled={leavingForBrowse} onChange={handleFileChange} className="hidden" aria-label="합성할 사진" />
+              <div className={`${styles.photoSlot} ${myPhoto ? styles.photoFilled : ""}`}>
+                {myPhoto ? <div className={styles.photoPreview}>
+                  <img src={myPhoto} alt="my photo" onLoad={() => trackEvent("photo_preview_loaded")} onError={() => trackEvent("photo_preview_failed")} />
+                </div> : <div className={styles.photoBody}>
+                  <button type="button" className={styles.photoPick} disabled={leavingForBrowse} aria-label="사진 고르기" aria-describedby="compose-photo-guidance" onClick={() => {
+                    trackEvent("photo_picker_opened"); fileInputRef.current?.click();
+                  }}><PlusIcon className={styles.photoAddIcon} aria-hidden="true" /><ImageIcon aria-hidden="true" /></button>
+                  <p id="compose-photo-guidance" className={styles.guidance}>대상이 잘 보이는 사진을 골라주세요.</p>
+                </div>}
+              </div>
+              {fileError && <p className={styles.error} role="alert">{fileError}</p>}
+            </section>
+          </div>
+          <div className={styles.completion}>
+            {!hasUserSession && !sessionError && <p role="status" className={styles.sessionNotice}>체험을 준비하고 있어요. 먼저 사진을 골라도 좋아요.</p>}
+            {sessionError && <div role="alert" className={styles.error}>
+              <p>{sessionError}</p><button type="button" onClick={() => void prepareSession()} className={styles.textAction}>접속 다시 확인</button>
+            </div>}
+            <div className={myPhoto ? styles.executionReady : undefined}>
+              {myPhoto && consentRequired ? <fieldset className={styles.consent}>
+                <legend className="sr-only">처음 이용할 때 한 번 확인해요</legend>
+                <div className={styles.consentHeader}>
+                  <label className={styles.consentAll}><input type="checkbox" checked={consent.age && consent.terms && consent.privacy}
+                    onChange={event => setConsent({ age: event.target.checked, terms: event.target.checked, privacy: event.target.checked })} />전체 동의</label>
+                  <Link href="/privacy" target="_blank" className={styles.policy}>사진 처리 안내</Link>
+                </div>
+                <label><input type="checkbox" checked={consent.age} onChange={event => setConsent({ ...consent, age: event.target.checked })} />[필수] 만 14세 이상</label>
+                <label><input type="checkbox" checked={consent.terms} onChange={event => setConsent({ ...consent, terms: event.target.checked })} /><span>[필수] <Link href="/terms" target="_blank">이용약관</Link> 동의</span></label>
+                <label><input type="checkbox" checked={consent.privacy} onChange={event => setConsent({ ...consent, privacy: event.target.checked })} /><span>[필수] <Link href="/privacy" target="_blank">개인정보처리방침</Link> 동의</span></label>
+              </fieldset> : <div className={styles.policyRow}><Link href="/privacy" target="_blank" className={styles.policy}>사진 처리 안내</Link></div>}
+              {myPhoto && <div className={styles.submit}>
+                <button type="button" onClick={() => { beginCompositionAttempt(); trackEvent("compose_clicked"); void handleCompose(); }}
+                  disabled={!gif || !hasUserSession || !consentReady || leavingForBrowse} className={styles.makeButton}>만들기</button>
+                <p>이번 만들기에 1회 사용</p>
               </div>}
             </div>
-            <button className="text-action" onClick={event => {
-              event.currentTarget.focus({ preventScroll: true });
-              setShowGifSheet(true);
-            }}>{gif ? "바꾸기" : "GIF 고르기"}</button>
-          </div>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" aria-label="합성할 사진" />
-          {myPhoto ? <>
-            <div className="photo-heading-row"><h2>넣은 사진</h2><div className="photo-actions">
-              <button className="text-action" onClick={() => { trackEvent("photo_change_clicked"); fileInputRef.current?.click(); }}>바꾸기</button>
-              <span aria-hidden="true">|</span><button className="text-action" onClick={clearPhoto}>삭제</button>
-            </div></div>
-            <div className="photo-preview"><img src={myPhoto} alt="my photo"
-              onLoad={() => trackEvent("photo_preview_loaded")} onError={() => trackEvent("photo_preview_failed")} /></div>
-          </> : <div className="photo-empty"><ImageIcon aria-hidden="true" /><button className="photo-pick"
-              onClick={() => { trackEvent("photo_picker_opened"); fileInputRef.current?.click(); }}>사진 고르기</button></div>}
-          {fileError && <p className="photo-error" role="alert">{fileError}</p>}
-          <Link href="/privacy" target="_blank" className="text-action photo-policy">사진 처리 안내</Link>
-          {consentRequired && <fieldset className="consent-inline">
-            <legend className="px-1">처음 이용할 때 한 번 확인해요</legend>
-            <label className="consent-all"><input type="checkbox" checked={consent.age && consent.terms && consent.privacy}
-              onChange={event => setConsent({ age: event.target.checked, terms: event.target.checked, privacy: event.target.checked })} />전체 동의</label>
-            <label><input type="checkbox" checked={consent.age} onChange={event => setConsent({ ...consent, age: event.target.checked })} />[필수] 만 14세 이상</label>
-            <label><input type="checkbox" checked={consent.terms} onChange={event => setConsent({ ...consent, terms: event.target.checked })} /><span>[필수] <Link href="/terms" target="_blank">이용약관</Link> 동의</span></label>
-            <label><input type="checkbox" checked={consent.privacy} onChange={event => setConsent({ ...consent, privacy: event.target.checked })} /><span>[필수] <Link href="/privacy" target="_blank">개인정보처리방침</Link> 동의</span></label>
-          </fieldset>}
-          <div className="compose-submit">
-            <button onClick={() => { beginCompositionAttempt(); trackEvent("compose_clicked"); void handleCompose(); }}
-              disabled={!myPhoto || !gif || !hasUserSession || !consentReady} className="make-button">만들기</button>
-            <p>{isAnonymous ? "무료 1회 사용" : "1회 사용"} · 약 2~3분</p>
           </div>
         </div>
       )}
@@ -603,19 +632,13 @@ export function ComposePanel() {
       )}
 
       {visibleStage === "done" && job.resultUrl && (
-        <div className="completed-content">
+        <div className={resultStyles.page}>
           <h1>완성됐어요!</h1>
-          <div className="completed-media">
-            <ObservedResultImage src={job.resultUrl} jobId={jobId!} assetId={job.resultAssetId!} source="composition_result" className="w-full object-contain" />
-          </div>
-          <div className="result-actions">
-            <button className="result-save" disabled={!job.resultAssetId} onClick={() => {
-              if (job.resultAssetId) downloadGif(`${API_BASE}/assets/${job.resultAssetId}/download`, "composition_result", job.resultAssetId);
-            }}><DownloadIcon aria-hidden="true" />GIF 저장</button>
-            <ShareButton assetId={job.resultAssetId ?? undefined} analyticsSource="composition_result" className="result-copy" />
-          </div>
-          <button className="result-redo" onClick={() => handleReset("completed")}><UpdateIcon aria-hidden="true" />다시 만들기</button>
-          {jobId && <CompositionFeedback jobId={jobId} source="composition_result" />}
+          {jobId && job.resultAssetId ? <ResultMedia
+            src={job.resultUrl} jobId={jobId} assetId={job.resultAssetId}
+            source="composition_result" onRestart={() => handleReset("completed")}
+          /> : <p role="status">결과 파일 정보를 확인할 수 없어요. 잠시 후 다시 열어주세요.</p>}
+          {jobId && <div className={resultStyles.feedback}><CompositionFeedback jobId={jobId} source="composition_result" /></div>}
         </div>
       )}
 
@@ -643,14 +666,6 @@ export function ComposePanel() {
         </div>
       )}
     </main>
-
-    {showGifSheet && (
-      <GifSearchSheet
-        selectedId={gif?.id ?? null}
-        onSelect={(selected) => { setGif(selected); setShowGifSheet(false); }}
-        onClose={() => setShowGifSheet(false)}
-      />
-    )}
 
     </>
   );

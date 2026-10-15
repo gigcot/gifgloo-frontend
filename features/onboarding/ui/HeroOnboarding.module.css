@@ -1,0 +1,802 @@
+.hero {
+  --lavender: #c27bff;
+  --muted: #aaa5b3;
+  width: 100%;
+  max-width: 528px;
+  margin: 20px auto 0;
+  padding: 0 24px 24px;
+  color: #f7f5fa;
+  box-sizing: border-box;
+}
+
+.hero * {
+  box-sizing: border-box;
+}
+
+.hero h1,.hero h2,.hero p {
+  margin: 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.hero button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  cursor: pointer;
+}
+
+.hero img,.hero video {
+  display: block;
+  max-width: 100%;
+}
+
+.hero button:focus-visible {
+  outline: 2px solid var(--lavender);
+  outline-offset: 5px;
+}
+
+.headline {
+  height: 111px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.headline h1 {
+  font-size: 39px;
+  line-height: 1.24;
+  letter-spacing: -1.8px;
+  font-weight: 750;
+}
+
+.headline em {
+  font-style: normal;
+  color: var(--lavender);
+}
+
+.stage {
+  height: 400px;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #17151b;
+  position: relative;
+  isolation: isolate;
+}
+
+.story {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  background: #1c191b;
+  animation: enter .34s ease-out;
+  --chat-inset: 24px;
+  --chat-media-top: 96px;
+  --chat-media-width: 183px;
+  --chat-media-height: calc(var(--chat-media-width) * .74324);
+  --photo-top: calc(100% - 181px);
+}
+
+.chat {
+  position: absolute;
+  inset: 0;
+  background: #bbcbd9;
+  color: #202229;
+  font-size: 15px;
+  line-height: 1.4;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .65s ease,visibility .65s;
+}
+
+.chatTitle {
+  position: absolute;
+  top: 19px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: #4e5a68;
+}
+
+.bubble {
+  max-width: 90%;
+  padding: 10px 13px;
+  border-radius: 14px;
+  background: white;
+  align-self: flex-start;
+  width: fit-content;
+}
+
+.incoming {
+  border-top-left-radius: 4px;
+}
+
+.outgoing {
+  background: #ffe366;
+  align-self: flex-end;
+  border-top-right-radius: 4px;
+}
+
+.sender {
+  font-size: 11px;
+  color: #4d5660;
+}
+
+.send {
+  position: absolute;
+  right: var(--chat-inset);
+  top: 50px;
+}
+
+.replies {
+  position: absolute;
+  left: var(--chat-inset);
+  right: var(--chat-inset);
+  bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.storyMedia {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%,-50%);
+  overflow: hidden;
+  border-radius: 0;
+  transition: width .8s cubic-bezier(.22,1,.36,1),height .8s cubic-bezier(.22,1,.36,1),top .8s cubic-bezier(.22,1,.36,1),left .8s cubic-bezier(.22,1,.36,1),transform .8s cubic-bezier(.22,1,.36,1),border-radius .8s;
+}
+
+.source,.result {
+  position: absolute;
+  inset: 0;
+  transition: opacity .5s ease,visibility .5s;
+}
+
+.storyMedia img,.storyMedia video {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+.source {
+  opacity: 1;
+  visibility: visible;
+}
+
+.result {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.storyLabel {
+  position: absolute;
+  top: 17px;
+  left: 18px;
+  max-width: calc(100% - 36px);
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: #17131ee8;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
+  transition: opacity .3s;
+}
+
+.photo {
+  position: absolute;
+  margin: 0;
+  left: 18px;
+  top: var(--photo-top);
+  width: 110px;
+  height: 163px;
+  padding: 6px;
+  background: #f8f5ef;
+  border: 1px solid #fff9;
+  border-radius: 13px;
+  box-shadow: 0 5px 22px #0003;
+  color: #25212b;
+  transition: top .8s cubic-bezier(.22,1,.36,1),left .8s cubic-bezier(.22,1,.36,1),width .8s,height .8s,opacity .4s,visibility .4s;
+}
+
+.photo>img {
+  width: 100%;
+  height: 111px;
+  object-fit: cover;
+  border-radius: 8px;
+  transition: height .8s;
+}
+
+.photo figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 2px 0;
+  line-height: 1.2;
+}
+
+.photo strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.photo figcaption span {
+  font-size: 10px;
+  color: #6c626d;
+}
+
+.story[data-phase=result] .source,.story[data-phase=chat] .source {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.story[data-phase=result] .result,.story[data-phase=chat] .result {
+  opacity: 1;
+  visibility: visible;
+}
+
+.story[data-phase=chat] .chat {
+  opacity: 1;
+  visibility: visible;
+}
+
+.story[data-phase=chat] .storyMedia {
+  left: calc(100% - var(--chat-inset));
+  top: var(--chat-media-top);
+  width: var(--chat-media-width);
+  height: var(--chat-media-height);
+  background: #9ba9b4;
+  transform: translate(-100%,0);
+  border-radius: 13px;
+}
+
+.story[data-phase=chat] .photo {
+  left: var(--chat-inset);
+  top: var(--chat-media-top);
+  width: 90px;
+  height: 135px;
+  box-shadow: 0 3px 12px #0001;
+}
+
+.story[data-phase=chat] .photo>img {
+  height: 84px;
+}
+
+.story[data-phase=chat] .storyLabel {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.prompt {
+  position: absolute;
+  top: 24px;
+  left: var(--chat-inset);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prompt .bubble {
+  max-width: 100%;
+}
+
+.story[data-input-visible=false] .photo {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.game,.late {
+  --chat-media-width: 232px;
+  --chat-media-height: 185px;
+}
+
+.game {
+  --photo-top: 68px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  height: 44px;
+}
+
+.caption {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.controls {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.count {
+  font-size: 11px;
+  color: #9e98a7;
+  font-variant-numeric: tabular-nums;
+  margin-right: 8px;
+}
+
+.hero .iconButton {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border-radius: 50%;
+  padding: 10px;
+  flex-shrink: 0;
+}
+
+.iconButton svg {
+  width: 20px;
+  height: 20px;
+}
+
+.hero .iconButton:hover {
+  background: #27232f;
+}
+
+.hero .iconButton:active {
+  background: #3b2f48;
+}
+
+.actions {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.hero .primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 24px;
+  min-height: 54px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 650;
+  background: #9809ff;
+  color: #fff;
+  transition: background .16s,transform .16s;
+}
+
+.primary svg {
+  height: 21px;
+  width: 21px;
+}
+
+.hero .primary:hover {
+  background: #ab31ff;
+}
+
+.hero .primary:active {
+  transform: translateY(1px);
+}
+
+.hero .quiet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #c8b2d9;
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 45px;
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.hero .quiet:hover {
+  background: #1e1727;
+}
+
+.hero .footnote {
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+  color: #8a8394;
+  margin: 13px 0 0;
+}
+
+.dialog {
+  color: #f7f5fa;
+  background: #17131e;
+  border: 1px solid #43354f;
+  border-radius: 26px;
+  max-height: 90dvh;
+  padding: 26px 30px 30px;
+  box-shadow: 0 25px 100px #0008;
+  width: min(840px,calc(100% - 36px));
+  margin: auto;
+  overflow: auto;
+}
+
+.dialog::backdrop {
+  background: #08050cbb;
+  backdrop-filter: blur(8px);
+}
+
+.dialogTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.dialogTop>span {
+  font-size: 12px;
+  color: var(--lavender);
+  font-weight: 600;
+}
+
+.dialogTop .iconButton {
+  margin-right: -9px;
+}
+
+.dialog h2 {
+  font-size: 27px;
+  line-height: 1.4;
+  letter-spacing: -1px;
+}
+
+.hero .description {
+  font-size: 14px;
+  color: #b6a9c1;
+  line-height: 1.7;
+  margin: 12px 0 22px;
+}
+
+.recipe {
+  display: grid;
+  grid-template-columns: 1fr 25px 1fr 25px 1.2fr;
+  gap: 9px;
+  align-items: center;
+  margin: 24px 0 28px;
+}
+
+.recipe figure {
+  margin: 0;
+  min-width: 0;
+}
+
+.recipe figure>div {
+  height: 190px;
+  background: #0c0a10;
+  overflow: hidden;
+  border-radius: 14px;
+  position: relative;
+}
+
+.recipe img,.recipe video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.recipe figcaption {
+  font-size: 12px;
+  color: #c6bbd0;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.recipe>.operator {
+  width: 20px;
+  height: 20px;
+  margin-top: -28px;
+  opacity: .6;
+}
+
+.recipe .resultFigure figcaption {
+  color: var(--lavender);
+}
+
+.mediaNotice {
+  position: absolute;
+  inset: auto 8px 8px;
+  padding: 6px 8px;
+  background: #17131ee8;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 11px;
+  text-align: center;
+}
+
+@keyframes enter {
+  from {
+    opacity: .3;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media(min-width:1100px) and (min-height:850px) {
+  .hero {
+    margin-top: 38px;
+    max-width: 568px;
+  }
+  .headline {
+    height: 121px;
+  }
+  .headline h1 {
+    font-size: 43px;
+  }
+  .stage {
+    height: 440px;
+  }
+}
+
+@media (min-width: 700px) and (max-height: 800px) {
+  .hero {
+    margin-top: 12px;
+    padding-bottom: 16px;
+  }
+  .headline {
+    height: 94px;
+  }
+  .headline h1 {
+    font-size: 36px;
+  }
+  .stage {
+    height: 350px;
+  }
+  .story {
+    --chat-media-top: 88px;
+  }
+  .game, .late {
+    --chat-media-width: 208px;
+    --chat-media-height: 155px;
+  }
+  .chat {
+    font-size: 14px;
+  }
+  .bubble {
+    padding: 8px 12px;
+  }
+  .send {
+    top: 46px;
+  }
+  .replies {
+    bottom: 18px;
+    gap: 7px;
+  }
+  .footer {
+    margin-top: 6px;
+    height: 40px;
+  }
+  .actions {
+    margin-top: 8px;
+  }
+  .hero .primary {
+    min-height: 52px;
+    padding: 14px 24px;
+  }
+  .hero .quiet {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  .hero .footnote {
+    margin-top: 8px;
+  }
+}
+
+@media(max-width:600px) {
+  .hero {
+    margin-top: 14px;
+    padding: 0 20px 22px;
+    max-width: 430px;
+  }
+  .headline {
+    height: 98px;
+  }
+  .headline h1 {
+    font-size: 32px;
+    letter-spacing: -1.3px;
+  }
+  .stage {
+    height: 350px;
+    border-radius: 20px;
+  }
+  .story {
+    --chat-inset: 17px;
+    --chat-media-top: 84px;
+    --chat-media-width: 161px;
+    --photo-top: calc(100% - 159px);
+  }
+  .chat {
+    font-size: 14px;
+  }
+  .chatTitle {
+    top: 15px;
+  }
+  .bubble {
+    padding: 9px 11px;
+  }
+  .send {
+    top: 40px;
+  }
+  .replies {
+    bottom: 17px;
+    gap: 6px;
+  }
+  .photo {
+    left: 14px;
+    width: 96px;
+    height: 145px;
+    padding: 5px;
+    border-radius: 11px;
+  }
+  .photo>img {
+    height: 95px;
+  }
+  .photo strong {
+    font-size: 11px;
+  }
+  .photo figcaption span {
+    font-size: 9px;
+  }
+  .storyLabel {
+    top: 14px;
+    left: 14px;
+    font-size: 10px;
+    padding: 6px 9px;
+  }
+  .story[data-phase=chat] .photo {
+    width: 80px;
+    height: 121px;
+  }
+  .story[data-phase=chat] .photo>img {
+    height: 73px;
+  }
+  .game,.late {
+    --chat-media-width: 208px;
+    --chat-media-height: 165px;
+  }
+  .game {
+    --photo-top: 58px;
+  }
+  .prompt {
+    top: 20px;
+    gap: 5px;
+  }
+  .footer {
+    margin-top: 7px;
+  }
+  .caption {
+    font-size: 11px;
+    max-width: calc(100% - 113px);
+  }
+  .actions {
+    margin-top: 12px;
+  }
+  .hero .primary {
+    font-size: 15px;
+    padding: 15px 18px;
+    min-height: 51px;
+    border-radius: 13px;
+  }
+  .hero .quiet {
+    font-size: 13px;
+    min-height: 44px;
+  }
+  .hero .footnote {
+    font-size: 10px;
+    margin-top: 12px;
+  }
+  .dialog {
+    width: calc(100% - 28px);
+    padding: 18px 20px 22px;
+    border-radius: 22px;
+    max-height: 92dvh;
+  }
+  .dialog h2 {
+    font-size: 23px;
+  }
+  .hero .description {
+    font-size: 13px;
+  }
+  .recipe {
+    grid-template-columns: 1fr 22px 1fr;
+    gap: 9px;
+    margin: 20px 0;
+  }
+  .recipe figure>div {
+    height: 133px;
+  }
+  .recipe>.resultArrow {
+    display: none;
+  }
+  .recipe .resultFigure {
+    grid-column: 1/-1;
+    margin-top: 8px;
+  }
+  .recipe .resultFigure>div {
+    height: 195px;
+  }
+  .recipe figcaption {
+    margin-top: 7px;
+    font-size: 11px;
+  }
+  .recipe>.operator {
+    margin-top: -20px;
+  }
+  .dialogTop {
+    margin-bottom: 9px;
+  }
+  .dialogTop>span {
+    font-size: 11px;
+  }
+}
+
+@media(max-width:360px) {
+  .hero {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .headline h1 {
+    font-size: 29px;
+  }
+  .stage {
+    height: 334px;
+  }
+  .story {
+    --chat-inset: 14px;
+    --chat-media-width: 145px;
+  }
+  .replies {
+    bottom: 14px;
+    gap: 5px;
+  }
+  .replies .bubble {
+    font-size: 12px;
+  }
+  .story[data-phase=chat] .photo {
+    width: 76px;
+  }
+  .photo {
+    width: 87px;
+    height: 138px;
+    top: calc(100% - 152px);
+  }
+  .photo>img {
+    height: 89px;
+  }
+  .game,.late {
+    --chat-media-width: 185px;
+    --chat-media-height: 151px;
+  }
+  .game .photo {
+    top: 58px;
+  }
+  .game[data-phase=chat] .photo,.late[data-phase=chat] .photo {
+    width: 70px;
+  }
+  .prompt {
+    top: 18px;
+  }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .hero *,.hero *::before,.hero *::after {
+    animation: none!important;
+    transition: none!important;
+    scroll-behavior: auto!important;
+  }
+}

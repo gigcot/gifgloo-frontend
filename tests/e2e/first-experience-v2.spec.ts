@@ -11,6 +11,7 @@ const gif = { id: "hippo", slug: "hippo", title: "물 맞는 하마", blur_previ
 async function setup(page: Page, permission: "granted" | "denied" = "granted", registrationFails = false) {
   const state = { subscriptions: 0, requests: 0, accept: true };
   await page.route("https://cloud.umami.is/**", route => route.abort());
+  await page.route("https://static.klipy.com/**", route => route.fulfill({ contentType: "image/png", path: "public/icon.png" }));
   await page.route("http://localhost:8000/**", async route => {
     const request = route.request(), pathname = new URL(request.url()).pathname;
     if (pathname === "/users/me") return route.fulfill({ json: { user_id: "guest", user_kind: "anonymous", consent_required: false } });
@@ -62,41 +63,90 @@ async function setup(page: Page, permission: "granted" | "denied" = "granted", r
 
 async function compose(page: Page) {
   await page.goto("/");
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
   await page.getByRole("button", { name: "물 맞는 하마 선택", exact: true }).click();
-  await page.getByRole("button", { name: "이 GIF로 만들기" }).click();
+  await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
+  await expect(page.getByAltText("selected gif")).toBeVisible();
+  await expect(page.getByAltText("my photo")).toHaveCount(0);
   await page.locator('input[type="file"]').setInputFiles("public/examples/hippo-pets/dog.jpg");
+  await expect(page.getByAltText("my photo")).toBeVisible();
 }
 
-test("provider categories preserve ordering and selected GIF is inspected without gating", async ({ page }) => {
+test("category topics retain provider order while the selection bar changes and clears the tentative GIF", async ({ page }) => {
   await setup(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "카테고리 선택", exact: true }).click();
-  await expect(page.getByRole("dialog").getByRole("button", { name: "졸려", exact: true })).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "귀여워", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "귀여워 GIF" })).toBeVisible();
-  const choices = page.locator(".gif-grid .gif-choice");
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("navigation", { name: "GIF 분류" }).getByRole("button", { name: "동작", exact: true }).click();
+  await page.getByRole("button", { name: "춤추기 GIF 둘러보기", exact: true }).click();
+  const choices = page.getByTestId("gif-results").locator(".gif-choice");
+  await expect(choices).toHaveCount(2);
   await expect(choices.first()).toHaveAttribute("aria-label", "물 맞는 하마 선택");
+  await expect(choices.nth(1)).toHaveAttribute("aria-label", "두 번째 GIF 선택");
+  const selection = page.getByRole("group", { name: "선택한 GIF", exact: true });
+  await expect(selection).toHaveCount(0);
   await choices.first().click();
-  await expect(page.locator(".selection-bar")).toContainText("20프레임");
-  await expect(page.getByRole("button", { name: "이 GIF로 만들기" })).toBeEnabled();
+  await expect(choices.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(selection).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(selection.getByRole("status")).toHaveText("물 맞는 하마 선택됨");
+  await choices.nth(1).click();
+  await expect(choices.first()).toHaveAttribute("aria-pressed", "false");
+  await expect(choices.nth(1)).toHaveAttribute("aria-pressed", "true");
+  await expect(selection.getByRole("status")).toHaveText("두 번째 GIF 선택됨");
+  const expand = selection.getByRole("button", { name: "선택한 GIF 크게 보기", exact: true });
+  await expand.click();
+  const preview = page.getByRole("dialog", { name: "대상을 바꿔볼까요?", exact: true });
+  await expect(preview).toBeVisible();
+  await expect(preview).not.toContainText("프레임");
+  await expect(preview.getByRole("button", { name: "사진 고르기", exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => localStorage.getItem("compose_gif"))).toBeNull();
+  await preview.getByRole("button", { name: "GIF 미리보기 닫기", exact: true }).click();
+  await expect(expand).toBeFocused();
+  await expect(choices.nth(1)).toHaveAttribute("aria-pressed", "true");
+  await selection.getByRole("button", { name: "GIF 선택 취소", exact: true }).click();
+  await expect(selection).toHaveCount(0);
+  await expect(choices.nth(1)).toHaveAttribute("aria-pressed", "false");
+  await expect(page).toHaveURL(/\/\?browse=1$/);
 });
 
-test("touch inspection does not select on long press release", async ({ page }) => {
-  await setup(page);
+for (const control of ["selection_bar", "preview"] as const) test(`mobile ${control} opens compose without a file picker and keeps photo selection in compose`, async ({ page }) => {
+  const state = await setup(page);
+  let filePickerOpened = false;
+  page.on("filechooser", () => { filePickerOpened = true; });
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
   const choice = page.getByRole("button", { name: "물 맞는 하마 선택", exact: true });
-  await choice.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true, clientX: 40, clientY: 40 });
-  await expect(choice.getByRole("status")).toHaveText("20프레임");
-  await expect(choice).toHaveAttribute("aria-pressed", "false");
-  await choice.dispatchEvent("pointerup", { pointerType: "touch", isPrimary: true });
-  await choice.dispatchEvent("click", { detail: 1 });
-  await expect(choice).toHaveAttribute("aria-pressed", "false");
-  await expect(page.locator(".selection-bar")).toHaveCount(0);
-  await choice.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true });
-  await choice.dispatchEvent("pointerup", { pointerType: "touch", isPrimary: true });
-  await choice.dispatchEvent("click", { detail: 1 });
+  await choice.click();
+  const selection = page.getByRole("group", { name: "선택한 GIF", exact: true });
+  const expand = selection.getByRole("button", { name: "선택한 GIF 크게 보기", exact: true });
+  const preview = page.getByRole("dialog", { name: "대상을 바꿔볼까요?", exact: true });
+  await expect(preview).toHaveCount(0);
+  await expand.click();
+  await expect(preview).toBeVisible();
+  await expect(preview).not.toContainText("프레임");
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(expand).toBeFocused();
   await expect(choice).toHaveAttribute("aria-pressed", "true");
+  if (control === "preview") await expand.click();
+  await (control === "preview" ? preview : selection).getByRole("button", { name: "사진 고르기", exact: true }).click();
+  await expect(page).toHaveURL(/\/compose$/);
+  await expect(page.getByAltText("selected gif")).toBeVisible();
+  await expect(page.getByAltText("my photo")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "만들기", exact: true })).toHaveCount(0);
+  expect(filePickerOpened).toBe(false);
+  await page.locator('input[type="file"]').setInputFiles("public/examples/hippo-pets/dog.jpg");
+  await expect(page.getByAltText("my photo")).toBeVisible();
+  expect(state.requests).toBe(0);
+  await expect(page.getByRole("heading", { name: "넣은 사진", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "사진 삭제", exact: true }).click();
+  await expect(page.getByAltText("my photo")).toHaveCount(0);
+  await expect(page.getByAltText("selected gif")).toBeVisible();
+  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "만들기", exact: true })).toHaveCount(0);
 });
 
 test("request acceptance gates safe departure and notification registration is explicit", async ({ page }) => {
@@ -145,14 +195,25 @@ for (const width of [320, 390, 768, 1440]) test(`capture actual first experience
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /사진 속 주인공/ })).toBeVisible();
-  await expect(page.locator(".hero")).toHaveCSS("background-color", "rgb(152, 9, 255)");
-  await expect(page.locator(".first-experience")).toHaveCSS("color", "rgb(255, 255, 255)");
-  await page.getByRole("button", { name: "예시 재생 멈추기" }).click();
+  await expect(page.getByRole("button", { name: "나도 만들어볼래요!", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "어떻게 만드나요?", exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(captureDir, `home-${width}.png`) });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await expect(page.getByText("넣고 싶은 대상을 떠올리며 둘러보세요.", { exact: true })).toBeVisible();
+  await page.screenshot({ path: path.join(captureDir, `browse-${width}.png`) });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await page.getByRole("button", { name: "물 맞는 하마 선택", exact: true }).click();
-  await page.getByRole("button", { name: "이 GIF로 만들기" }).click();
-  await expect(page.getByRole("heading", { name: "어떤 사진을 넣어볼까요?" })).toBeVisible();
+  const selection = page.getByRole("group", { name: "선택한 GIF", exact: true });
+  await expect(selection).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.screenshot({ path: path.join(captureDir, `selection-${width}.png`) });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  await selection.getByRole("button", { name: "사진 고르기", exact: true }).click();
+  await expect(page).toHaveURL(/\/compose$/);
+  await expect(page.getByRole("heading", { name: "사진을 넣어보세요" })).toBeVisible();
+  await expect(page.getByAltText("selected gif")).toBeVisible();
+  await expect(page.getByAltText("my photo")).toHaveCount(0);
   await page.locator('input[type="file"]').setInputFiles("public/examples/hippo-pets/dog.jpg");
   await expect(page.getByAltText("my photo")).toBeVisible();
   await page.screenshot({ path: path.join(captureDir, `input-${width}.png`) });
@@ -167,11 +228,11 @@ for (const width of [320, 390, 768, 1440]) test(`capture actual first experience
   expect(errors).toEqual([]);
 });
 
-test("frame inspection failure never blocks GIF choice or composition", async ({ page }) => {
+test("composition does not depend on a separate frame inspection", async ({ page }) => {
   await setup(page);
   await page.context().route("**/frame.gif", route => route.abort());
   await compose(page);
-  await expect(page.getByText("프레임 확인 못함", { exact: true })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("프레임");
   await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeEnabled();
 });
 

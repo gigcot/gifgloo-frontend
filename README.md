@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gifgloo Frontend
 
-## Getting Started
+Next.js App Router / React / TypeScript. 기존 프로젝트의 책임 경계를 유지하며 기능별로 화면과 상태를 나눈다. Next 변경 시 `AGENTS.md`에 따라 설치된 버전의 `node_modules/next/dist/docs`를 먼저 확인한다.
 
-First, run the development server:
+## 실행
 
-```bash
+```sh
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env.local`에 기존 API·인증·결제 환경 설정을 둔다. `KLIPY_API_KEY`는 서버 전용이며 `NEXT_PUBLIC_API_BASE`는 백엔드 주소다. 온보딩과 GIF 검색은 백엔드 없이도 확인할 수 있으나 세션·크레딧·합성은 실행 중인 백엔드가 필요하다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```sh
+npm run lint
+npx tsc --noEmit
+npm run test:unit
+npm run test:e2e
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+E2E는 외부 합성·결제 응답을 mock하고 3100 포트의 프론트를 사용한다. 실제 과금 합성 성공을 검증하는 테스트가 아니다.
 
-## Learn More
+## 구조와 책임
 
-To learn more about Next.js, take a look at the following resources:
+| 위치 | 책임 |
+| --- | --- |
+| `app` | 라우팅, 페이지 조합, 서버 API 프록시 |
+| `features/onboarding` | 이야기별 예시 데이터, 자동 전환, 합성 재료 설명 |
+| `features/gif-search/model` | 분류 스냅샷·한국어 주제 연결, 검색·페이지·복귀 상태 |
+| `features/gif-search/ui` | 분류 탐색, 결과 목록, 미리보기, 합성 화면 검색 시트 |
+| `features/compose` | 사진 준비·제출·작업 상태·결과 흐름 |
+| `entities/gif` | 정규화된 GIF 타입과 미디어 URL 선택 |
+| `shared/api`, `shared/lib`, `shared/ui` | 외부 응답 변환, 인증·관측 등의 공통 기능, 공통 UI |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+의존 방향은 페이지 → 기능 → 엔티티/공통 코드다. 기능 전용 상태를 `shared`에 넣거나 결과 표시 컴포넌트 안에서 검색·페이지 수집을 중복 구현하지 않는다. 온보딩·탐색 스타일은 CSS module로 범위를 제한하며 합성 화면의 전역 스타일을 덮어쓰지 않는다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 온보딩 → 탐색 → 합성
 
-## Deploy on Vercel
+- `/`는 예시를 보여준다. 시작 버튼 또는 예시 끝에서 충분히 아래로 스크롤하면 `/?browse=1`로 이동한다. 탐색 목록 맨 위에서 충분히 위로 스크롤하면 헤더 중앙에 복귀 화살표가 나타나며, 눌러야 예시로 돌아온다. 다시 아래로 스크롤하면 화살표는 숨긴다. 짧은 입력에는 저항만 주고, 전환 직후에는 연속 전환을 막는다. 경계의 PageDown은 탐색으로 이동하고 PageUp은 복귀 버튼을 표시·포커스한다.
+- 데스크톱 분류는 검색창 왼쪽 버튼으로 접거나 펼치며, 검색어·결과는 유지한다. 모바일 분류 버튼은 한 열 목록의 왼쪽 패널을 열고, 분류를 고르면 닫힌다.
+- 분류와 GIF 목록은 각각 독립적으로 스크롤하며, 분류 끝에서 목록으로 스크롤이 전파되지 않는다. 데스크톱 휠 이동량은 기본의 58%로 낮추고 모바일 목록 내부는 기본 터치 스크롤을 유지한다. 홈의 푸터는 탐색 목록 끝에 표시한다.
+- 홈과 합성 시트의 탐색 상태는 별도로 보존한다. 검색 요청 취소, 동일 페이지 재시도, ID 중복 제거는 탐색 model에서 담당한다.
+- 탐색 위치는 페이지 전체가 아닌 내부 목록의 scrollTop으로 보존한다. 홈에서 GIF 타일을 누르면 목록 아래 선택 바가 나타나며, 확대는 보조 버튼으로 연다. 선택 바와 확대 화면의 “사진 고르기”는 선택한 GIF를 전달하고 합성 화면으로 이동한다. 실제 사진 선택은 합성 화면에서 한다. 합성 화면 안에서 GIF만 교체하는 검색 시트는 기존 미리보기·확정 흐름을 유지한다.
+- 합성 페이지에는 `entities/gif`의 **전체 `Gif` 객체**를 `compose_gif` 키로 전달한다. MP4 썸네일만 넘기지 않는다. 실제 합성은 HD GIF를 사용한다.
+- `/compose?job=...`는 접수된 작업 복귀이며, 새 GIF를 저장한 값을 소비하지 않는다.
+- GIF 변경 시트는 사진 파일을 소유하지 않는다. 사진과 object URL의 수명은 합성 패널이 관리한다.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+KLIPY 전체 분류는 검토한 웹 분류의 정적 스냅샷이다. 공식 categories API의 자동 갱신 결과가 아니다. 한국어 도움은 준비된 주제와 영어 검색어의 연결이며 범용 번역을 의미하지 않는다. 검색 결과 순서는 API 응답 순서를 유지한다.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+추천어는 한글 음절·영어 부분 일치와 한글 초성(`ㅇ`, `ㅌ`, `ㄷㅂ`)을 지원한다. `담ㅂ`처럼 음절과 초성이 섞인 입력도 연결한다. 추천 목록이 있을 때만 영어 검색 안내를 표시하며, 주제를 고르면 한글 이름을 보여주고 연결된 영어 query로 검색한다.
+
+## 온보딩 예시 자산
+
+현재 공개 예시는 강아지·스누피, 얼굴·Getting Online, 고양이·Run Run Forest 3개다. 2026-10-15 사용자가 이 예시의 원본 GIF·입력 사진·합성 MP4·포스터 12개 파일을 GitHub 저장소와 운영 사이트에 임시 공개하도록 승인했다. 공개용 파일은 아래 경로에서 Git으로 추적하며 로컬·배포 모두 같은 예시를 사용한다.
+
+```
+public/examples/onboarding/
+  {dog-snoopy,face-online,cat-running}-{source.gif,target.png,result.mp4,poster.webp}
+```
+
+개인 사진이 포함된 기존 작업 폴더 `public/examples/onboarding-local/`, `prototypes/onboarding-preview/`, QA 캡처는 계속 Git에서 제외한다. `NEXT_PUBLIC_LOCAL_ONBOARDING_EXAMPLES`는 더 이상 사용하지 않는다. 예시 교체는 별도 작업이며 임시 공개 결정은 원본 콘텐츠 사용권 확인 완료를 뜻하지 않는다.
+
+## 다음 점검
+
+합성 패널은 입력·동의·제출·결과를 조율하는 책임이 많이 모여 있다. 다음 합성 화면 UX 점검에서 실제 사용자 단계에 맞춰 분리 여부를 판단한다. 이번 UI 통합은 합성 모델·프롬프트·결제 정책을 변경하지 않는다.
