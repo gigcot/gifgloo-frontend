@@ -46,3 +46,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local design experiments and private example media
+/prototypes/onboarding-preview/
+/public/examples/onboarding-local/
+/qa/onboarding-integration/

@@ -1,7 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { CheckIcon, QuestionMarkCircledIcon, UpdateIcon } from "@radix-ui/react-icons";
-import { getGifUrl, type Gif } from "@/entities/gif/model";
+import { useEffect, useRef } from "react";
+import { QuestionMarkCircledIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { type GifFrame } from "../model/use-gif-frames";
 export function FrameStatus({ frame, compact = false }: { frame?: GifFrame; compact?: boolean }) {
   if (!frame) return null;
@@ -42,54 +41,4 @@ export function FrameHelp({ count, compact = false }: { count?: number; compact?
       </>}
     </div>
   </details>;
-}
-
-export function GifChoice({ gif, selected, frame, onInspect, onSelect }: { gif: Gif; selected: boolean; frame?: GifFrame; onInspect: (gif: Gif) => void; onSelect: (gif: Gif) => void }) {
-  const [inspectionIntent, setInspectionIntent] = useState<{ delay: number; suppressSelection: boolean } | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const suppressClick = useRef(false);
-  function clearIntent() { clearTimeout(timer.current); setInspectionIntent(null); }
-  function schedule(delay: number, suppressSelection = false) {
-    clearIntent();
-    setInspectionIntent({ delay, suppressSelection });
-  }
-  useEffect(() => {
-    if (!inspectionIntent) return;
-    const timeout = setTimeout(() => {
-      if (inspectionIntent.suppressSelection) suppressClick.current = true;
-      onInspect(gif);
-    }, inspectionIntent.delay);
-    timer.current = timeout;
-    return () => clearTimeout(timeout);
-  }, [gif, onInspect, inspectionIntent]);
-  return <button className={`gif-choice${selected ? " selected" : ""}`} aria-label={`${gif.title} 선택`} aria-pressed={selected}
-    aria-describedby={frame ? `frames-${gif.id}` : undefined}
-    onPointerEnter={event => { if (event.pointerType === "mouse") schedule(350); }}
-    onPointerLeave={clearIntent}
-    onFocus={event => { if ((event.target as HTMLElement).matches(":focus-visible")) schedule(350); }}
-    onBlur={clearIntent}
-    onPointerDown={event => {
-      suppressClick.current = false;
-      if (event.pointerType === "mouse" || !event.isPrimary) return;
-      start.current = { x: event.clientX, y: event.clientY };
-      schedule(450, true);
-    }}
-    onPointerMove={event => {
-      if (start.current && Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 10) {
-        clearIntent(); start.current = null; suppressClick.current = true;
-      }
-    }}
-    onPointerUp={() => { clearIntent(); start.current = null; }}
-    onPointerCancel={() => { clearIntent(); start.current = null; suppressClick.current = true; }}
-    onContextMenu={event => event.preventDefault()}
-    onClick={event => {
-      clearIntent();
-      if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; event.preventDefault(); return; }
-      onSelect(gif);
-    }}>
-    <img src={getGifUrl(gif, "sm")} alt={gif.title} loading="lazy" draggable="false" />
-    {frame && <span id={`frames-${gif.id}`} className="frame-badge"><FrameStatus frame={frame} compact /></span>}
-    {selected && <span className="selection-mark"><CheckIcon aria-hidden="true" /></span>}
-  </button>;
 }

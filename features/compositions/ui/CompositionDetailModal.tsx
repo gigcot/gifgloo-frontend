@@ -3,9 +3,7 @@
 import { useEffect, useState } from "react";
 import type { CompositionJob } from "@/features/compositions/model/types";
 import { API_BASE } from "@/shared/lib/api-base";
-import { downloadGif } from "@/shared/lib/download";
-import { ShareButton } from "@/shared/ui/ShareButton";
-import { ObservedResultImage } from "@/shared/ui/ObservedResultImage";
+import { ResultMedia } from "@/features/compositions/ui/ResultMedia";
 import { useAuth } from "@/shared/lib/use-auth";
 import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
 import { Exp001SurveyInvitation } from "@/features/experiment/ui/Exp001SurveyInvitation";
@@ -117,36 +115,14 @@ export function CompositionDetailModal({ job, onClose }: Props) {
           </button>
         </div>
 
-        {job.result_url && job.result_asset_id ? <ObservedResultImage
+        {job.result_url && job.result_asset_id ? <ResultMedia
           src={job.result_url} jobId={job.job_id} assetId={job.result_asset_id} source="my_assets"
-          className="h-[45vh] min-h-72 max-h-[560px] w-full object-contain"
         /> : <MediaTile
           src={job.result_url}
           alt="합성 결과"
           className="h-[45vh] min-h-72 max-h-[560px] w-full"
           imageClassName="object-contain"
         />}
-
-        {job.result_url && (
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              onClick={() => downloadGif(
-                `${API_BASE}/assets/${job.result_asset_id}/download`,
-                "my_assets",
-                job.result_asset_id ?? undefined,
-              )}
-              disabled={!job.result_asset_id}
-              className="flex flex-1 items-center justify-center gap-2 rounded-full bg-purple-600 py-3 text-sm font-bold text-white shadow-lg shadow-purple-950/40 transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              다운로드
-            </button>
-            <ShareButton
-              assetId={job.result_asset_id ?? undefined}
-              analyticsSource="my_assets"
-              className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] py-3 text-sm font-semibold text-white/70 transition-colors hover:border-white/35 hover:text-white"
-            />
-          </div>
-        )}
 
         {job.status === "COMPLETED" && <>
           <CompositionFeedback jobId={job.job_id} source="my_assets" />

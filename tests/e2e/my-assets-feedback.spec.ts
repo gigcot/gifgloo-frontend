@@ -89,7 +89,7 @@ test("loading and failed reads do not masquerade as unsubmitted or block share",
   await expect(page.getByRole("button", { name: "만족해요", exact: true })).toHaveCount(0);
   state.readFails = true; state.delayRead = false;
   await expect(page.getByRole("button", { name: "평가 상태 다시 확인" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "다운로드", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "GIF 저장", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "링크 복사" }).click();
   expect(state.shares).toBe(1);
   expect(state.puts).toEqual([]);

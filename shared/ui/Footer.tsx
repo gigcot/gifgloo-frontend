@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const policyLinks = [
   { href: "/service-guide", label: "서비스 안내" },
@@ -9,7 +12,9 @@ const policyLinks = [
   { href: "/contact", label: "문의" },
 ];
 
-export function Footer() {
+export function Footer({ embedded = false }: { embedded?: boolean }) {
+  const pathname = usePathname();
+  if (pathname === "/" && !embedded) return null;
   return (
     <footer className="border-t border-white/10 bg-[#09090b] px-4 py-6 text-white">
       <div className="mx-auto max-w-screen-xl">

@@ -1,0 +1,29 @@
+.home {
+  position: relative;
+  height: 100svh;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.home > header { position:relative; z-index:1; flex-shrink:0; }
+.returnToExamples { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:10; display:grid; place-items:center; width:44px; height:44px; border:1px solid #85559e; border-radius:50%; background:#302039; color:#efd8ff; box-shadow:0 5px 20px #0005; cursor:pointer; animation:revealReturn .2s ease-out; }
+.returnToExamples svg { width:24px; height:24px; }
+.returnToExamples:hover { background:#49265d; }
+.returnToExamples:focus-visible { outline:2px solid #c27bff; outline-offset:3px; }
+@keyframes revealReturn { from { opacity:0; translate:0 8px; } to { opacity:1; translate:0 0; } }
+.stage { flex: 1; min-height: 0; overflow: hidden; outline: none; }
+.enterBrowse, .enterExamples, .pulled { height: 100%; min-height: 0; }
+.enterBrowse { animation: rise .48s cubic-bezier(.2,.8,.2,1); }
+.enterExamples { animation: descend .48s cubic-bezier(.2,.8,.2,1); }
+.pulled { transform: translateY(var(--stage-pull, 0px)); transition: transform .18s ease-out; }
+.examples { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; outline: none; }
+.browser { height: 100%; max-width: 1440px; margin: 0 auto; padding: 18px 28px 0; outline: none; }
+@keyframes rise { from { transform: translateY(90px); opacity: .3; } to { transform: translateY(0); opacity: 1; } }
+@keyframes descend { from { transform: translateY(-90px); opacity: .3; } to { transform: translateY(0); opacity: 1; } }
+@media (max-width: 699px) { .browser { padding: 10px 18px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .enterBrowse, .enterExamples { animation: none; }
+  .returnToExamples { animation:none; }
+  .pulled { transform: none; transition: none; }
+}

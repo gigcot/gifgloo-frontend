@@ -13,7 +13,7 @@ function gifItem(id: number) {
     height: 320,
     size: 102_400,
   };
-  const sizes = { mp4: format };
+  const sizes = { mp4: format, gif: { ...format, url: "/test-source.gif" } };
 
   return {
     id,
@@ -24,9 +24,10 @@ function gifItem(id: number) {
   };
 }
 
-test("loads optimized home media and deduplicates auth lookup", async ({ page }) => {
+test("loads only the active story, defers GIF discovery and deduplicates auth lookup", async ({ page }) => {
   let authRequests = 0;
   let authenticated = false;
+  let gifRequests = 0;
   const mediaRequests: string[] = [];
 
   await page.addInitScript(() => {
@@ -50,6 +51,7 @@ test("loads optimized home media and deduplicates auth lookup", async ({ page })
     if (/\.(gif|mp4)$/.test(pathname)) mediaRequests.push(pathname);
   });
 
+  await page.route("http://localhost:8000/**", route => route.fulfill({ status: 500, json: { message: "Unexpected mocked endpoint" } }));
   await page.route("http://localhost:8000/users/me", async (route) => {
     authRequests += 1;
     if (!authenticated) {
@@ -78,6 +80,7 @@ test("loads optimized home media and deduplicates auth lookup", async ({ page })
     });
   });
   await page.route("**/api/gif?**", async (route) => {
+    gifRequests += 1;
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -93,17 +96,46 @@ test("loads optimized home media and deduplicates auth lookup", async ({ page })
     });
   });
 
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByText("어떤 GIF로 만들어볼까요?")).toBeVisible();
+  const hero = page.getByRole("region", { name: "개인화 GIF 예시", exact: true });
+  await expect(hero).toBeVisible();
   await expect.poll(() => authRequests).toBe(1);
-  await page.waitForTimeout(500);
+  const firstStory = hero.locator("[data-story][data-phase]");
+  await expect(firstStory).toHaveAttribute("data-phase", "source");
+  const firstId = await firstStory.getAttribute("data-story");
+  const firstSources = await firstStory.locator("video[src], img[src]").evaluateAll(elements =>
+    elements.map(element => new URL(element.getAttribute("src")!, location.origin).pathname),
+  );
+  await expect.poll(() => mediaRequests.length).toBeGreaterThan(0);
+  expect(mediaRequests.every(pathname => firstSources.includes(pathname))).toBe(true);
+  expect(gifRequests).toBe(0);
+  await expect(hero.getByRole("button", { name: "슬라이드 재생", exact: true })).toBeVisible();
+  const next = hero.getByRole("button", { name: "다음 슬라이드", exact: true });
+  await next.click();
+  await expect(firstStory).toHaveAttribute("data-phase", "result");
+  await next.click();
+  await expect(firstStory).toHaveAttribute("data-phase", "chat");
+  expect(mediaRequests.every(pathname => firstSources.includes(pathname))).toBe(true);
+  await next.click();
+  await expect(firstStory).not.toHaveAttribute("data-story", firstId!);
+  await expect.poll(() => mediaRequests.some(pathname => !firstSources.includes(pathname))).toBe(true);
+  expect(gifRequests).toBe(0);
 
-  expect(mediaRequests.some((pathname) => pathname.endsWith(".mp4"))).toBe(true);
-  expect(mediaRequests.filter((pathname) => pathname.endsWith(".gif"))).toEqual([]);
-
+  await hero.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "GIF 검색" })).toBeVisible();
+  await expect.poll(() => gifRequests).toBe(1);
+  await expect(page.getByRole("button", { name: "GIF 1 선택", exact: true })).toBeVisible();
+  await expect.poll(() => mediaRequests.includes("/punch_pepe_podo.mp4")).toBe(true);
+  expect(mediaRequests).not.toContain("/test-source.gif");
   await page.getByRole("button", { name: "GIF 1 선택", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(mediaRequests).not.toContain("/test-source.gif");
   authenticated = true;
-  await page.getByRole("button", { name: "이 GIF로 만들기" }).click();
+  await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
+  await expect(page).toHaveURL(/\/compose$/);
+  await expect(page.getByAltText("selected gif")).toBeVisible();
+  await expect(page.getByAltText("my photo")).toHaveCount(0);
   await expect.poll(() => authRequests).toBe(2);
   await expect.poll(() => page.evaluate(
     () => (window as typeof window & { __identifiedUserIds?: string[] }).__identifiedUserIds,

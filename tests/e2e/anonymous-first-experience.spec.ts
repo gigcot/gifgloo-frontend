@@ -63,11 +63,14 @@ async function setup(page: Page, mode: "normal" | "blocked" | "offline" = "norma
 
 async function openFromHome(page: Page) {
   await page.goto("/?utm_source=youtube&utm_campaign=exp001_run01");
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
   await page.getByRole("button", { name: "Guest GIF 선택", exact: true }).click();
-  await page.getByRole("button", { name: "이 GIF로 만들기" }).click();
+  await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
   await expect(page.getByAltText("selected gif")).toBeVisible();
+  await expect(page.getByAltText("my photo")).toHaveCount(0);
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
+  await expect(page.getByAltText("my photo")).toBeVisible();
 }
 
 async function recordedEvents(page: Page, name: string) {
@@ -78,7 +81,7 @@ async function recordedEvents(page: Page, name: string) {
 test("anonymous home journey reaches result, download, link, retry and return without signup", async ({ page }) => {
   const state = await setup(page);
   await openFromHome(page);
-  await expect(page.getByText("처음 이용할 때 한 번 확인해요")).toBeVisible();
+  await expect(page.getByRole("group", { name: "처음 이용할 때 한 번 확인해요", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeDisabled();
   for (const checkbox of await page.getByRole("checkbox").all()) await checkbox.check();
   await page.getByRole("button", { name: "만들기", exact: true }).click();
@@ -111,7 +114,7 @@ test("anonymous home journey reaches result, download, link, retry and return wi
   expect(state.oauth).toBe(0);
   await page.goto("/my-assets");
   await page.getByAltText("합성 결과").click();
-  await expect(page.getByRole("button", { name: "다운로드", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "GIF 저장", exact: true })).toBeVisible();
   await expect(page.getByAltText("내 사진")).toHaveAttribute("src", /^blob:/);
   await expect.poll(() => page.getByAltText("내 사진").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
   await page.reload();
@@ -155,7 +158,7 @@ test("private photo denial keeps the GIF available and never requests the old pu
   await page.getByAltText("합성 결과").click();
   await expect(page.getByText("미리보기를 불러오지 못했어요")).toBeVisible();
   await expect(page.getByAltText("내 사진")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "다운로드", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "GIF 저장", exact: true })).toBeEnabled();
   expect(publicRequests).toEqual([]);
 });
 
@@ -201,9 +204,9 @@ test("mobile anonymous input and account-link explanation remain usable", async 
 test("direct compose entry is not classified as a home funnel", async ({ page }) => {
   await setup(page);
   await page.goto("/compose");
-  await expect(page.getByText("처음 이용할 때 한 번 확인해요")).toBeVisible();
+  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
+  await expect.poll(async () => (await recordedEvents(page, "compose_viewed"))[0]?.flow_origin).toBe("direct_compose");
   const events = await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")) as { name: string; data: Record<string, unknown> }[];
-  expect(events.find((event) => event.name === "compose_viewed")?.data.flow_origin).toBe("direct_compose");
   expect(events.some((event) => event.name === "home_viewed")).toBe(false);
 });
 
@@ -221,21 +224,27 @@ for (const mode of ["blocked", "offline"] as const) {
   });
 }
 
-test("both GIF clear controls record one selection change without make intent", async ({ page }) => {
+test("preview dismissal retains the tentative GIF without make intent or another selection event", async ({ page }) => {
   await setup(page);
   await page.goto("/");
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
   const tile = page.getByRole("button", { name: "Guest GIF 선택", exact: true });
   await tile.click();
-  await page.getByRole("button", { name: "GIF 선택 취소", exact: true }).click();
-  await expect(page.locator(".selection-bar")).toHaveCount(0);
-  await tile.click();
-  await tile.click();
-  const changes = await recordedEvents(page, "gif_selection_changed");
-  expect(changes.map(event => event.action)).toEqual(["selected", "cleared", "selected", "cleared"]);
-  expect(changes.filter(event => event.action === "cleared").map(event => event.control)).toEqual(["selection_bar", "gif_tile"]);
-  expect(new Set(changes.map(event => event.flow_id)).size).toBe(1);
-  expect(changes.every(event => event.source === "trending")).toBe(true);
+  await expect(tile).toHaveAttribute("aria-pressed", "true");
+  const selection = page.getByRole("group", { name: "선택한 GIF", exact: true });
+  const expand = selection.getByRole("button", { name: "선택한 GIF 크게 보기", exact: true });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expand.click();
+  await page.getByRole("button", { name: "GIF 미리보기 닫기", exact: true }).click();
+  await expect(expand).toBeFocused();
+  await expand.click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(selection).toBeVisible();
+  await expect(tile).toHaveAttribute("aria-pressed", "true");
+  expect(await recordedEvents(page, "gif_selection_changed")).toMatchObject([{ action: "selected", surface: "home" }]);
   expect(await recordedEvents(page, "make_intent")).toHaveLength(0);
+  expect(await page.evaluate(() => localStorage.getItem("compose_gif"))).toBeNull();
 });
 
 test("consent tracks aggregate readiness only and distinguishes saving from checking", async ({ page }) => {
@@ -402,10 +411,13 @@ test("live Umami receives the internal QA journey and corrected branches", async
     return route.fulfill({ status: 422, json: { error: "CONFIRMATION_REQUIRED", code: "FRAME_REDUCTION_REQUIRED", message, proposal: { frame_count: 40, max_frames: 20 } } });
   });
   await page.goto(`/?utm_source=internal_qa&utm_campaign=${run}`);
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
   await page.getByRole("button", { name: "Guest GIF 선택", exact: true }).click();
-  await page.getByRole("button", { name: "GIF 선택 취소", exact: true }).click();
-  await page.getByRole("button", { name: "Guest GIF 선택", exact: true }).click();
-  await page.getByRole("button", { name: "이 GIF로 만들기" }).click();
+  await page.getByRole("button", { name: "선택한 GIF 크게 보기", exact: true }).click();
+  await page.getByRole("button", { name: "GIF 미리보기 닫기", exact: true }).click();
+  await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
+  await expect(page).toHaveURL(/\/compose$/);
+  await expect(page.getByAltText("selected gif")).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
   await page.getByRole("checkbox", { name: "전체 동의", exact: true }).check();
   await page.getByRole("button", { name: "만들기", exact: true }).click();
@@ -424,7 +436,8 @@ test("live Umami receives the internal QA journey and corrected branches", async
   const funnel = ["home_viewed", "make_intent", "compose_viewed", "compose_inputs_ready", "compose_clicked", "composition_requested", "composition_result_viewed"];
   expect(funnel.every(name => receipts.some(event => event.name === name))).toBe(true);
   expect(new Set(receipts.map(event => event.data.flow_id)).size).toBe(1);
-  expect(receipts.some(event => event.name === "gif_selection_changed" && event.data.control === "selection_bar" && event.data.action === "cleared")).toBe(true);
+  expect(receipts.filter(event => event.name === "gif_selection_changed")).toHaveLength(1);
+  expect(receipts.some(event => event.name === "gif_selection_changed" && event.data.action === "cleared")).toBe(false);
   expect(receipts.filter(event => event.name === "compose_consent_save").map(event => event.data.status)).toEqual(expect.arrayContaining(["error", "success"]));
   expect(receipts.some(event => event.name === "composition_request_step" && event.data.status === "confirmation_required")).toBe(true);
   await testInfo.attach("umami-receipts", { body: JSON.stringify({ run, receipts }, null, 2), contentType: "application/json" });
