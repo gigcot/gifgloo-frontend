@@ -7,7 +7,7 @@ import type { Gif } from "@/entities/gif/model";
 import { getGifUrl, safeParseGif } from "@/entities/gif/model";
 import { useAuth } from "@/shared/lib/use-auth";
 import { useCompositionJob } from "@/features/compose/model/use-composition-job";
-import { clearPendingPhoto, getPendingPhoto, setPendingPhoto } from "@/features/compose/model/pending-photo";
+import { clearPendingPhoto, getPendingPhoto } from "@/features/compose/model/pending-photo";
 import { submitComposition } from "@/features/compose/model/compose-api";
 import type { Confirmation } from "@/features/compose/model/compose-api";
 import { ResultMedia } from "@/features/compositions/ui/ResultMedia";
@@ -16,7 +16,7 @@ import { API_BASE } from "@/shared/lib/api-base";
 import { requestCreditBalanceRefresh } from "@/features/credits/model/use-credits";
 import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
 import { CompletionNotificationButton } from "./CompletionNotificationButton";
-import { CrossCircledIcon, ImageIcon, PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
+import { PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
 import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
 import { beginCompositionAttempt, journeyContext } from "@/shared/lib/journey";
@@ -27,6 +27,9 @@ import {
   useExp001SurveyStatus,
 } from "@/features/experiment/model/exp-001-survey";
 import { requestExp001SurveyOpen } from "@/features/experiment/model/exp-001-survey-open";
+import { onboardingStories } from "@/features/onboarding/model/stories";
+import { presetGif, scenePresets } from "@/features/gif-search/model/scene-presets";
+import { ComposeInputs } from "./ComposeInputs";
 import styles from "./ComposePanel.module.css";
 
 type Stage = "ready" | "processing" | "done" | "error";
@@ -42,6 +45,7 @@ export function ComposePanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get("job");
+  const example = onboardingStories.find(story => story.id === searchParams.get("example"));
   const { authFetch, userId, isAnonymous, hasUserSession, consentRequired, ensureSession, refreshAuth } = useAuth();
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [consent, setConsent] = useState({ age: false, terms: false, privacy: false });
@@ -56,8 +60,7 @@ export function ComposePanel() {
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [showInsufficientPass, setShowInsufficientPass] = useState(false);
-  const [leavingForBrowse, setLeavingForBrowse] = useState(false);
-  const [browseError, setBrowseError] = useState<string | null>(null);
+  const [samplePhotoLoading, setSamplePhotoLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [compositionWait, setCompositionWait] = useState<CompositionWait | null>(null);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
@@ -123,17 +126,18 @@ export function ComposePanel() {
   useEffect(() => {
     if (jobId) return;
     const saved = localStorage.getItem("compose_gif");
-    const restoredGif = saved ? safeParseGif(saved) : null;
+    const preset = example && scenePresets.find(scene => scene.id === example.sceneId);
+    const restoredGif = preset ? presetGif(preset, window.location.origin) : saved ? safeParseGif(saved) : null;
     const timer = window.setTimeout(() => {
       if (restoredGif) setGif(restoredGif);
       setRestoredInput(true);
       if (saved && localStorage.getItem("compose_gif") === saved) localStorage.removeItem("compose_gif");
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [jobId]);
+  }, [jobId, example]);
 
   useEffect(() => {
-    if (jobId) return;
+    if (jobId || example) return;
     let cancelled = false;
 
     getPendingPhoto().then((file) => {
@@ -145,7 +149,7 @@ export function ComposePanel() {
     return () => {
       cancelled = true;
     };
-  }, [setPhotoFromFile, jobId]);
+  }, [setPhotoFromFile, jobId, example]);
 
   // object URL 컴포넌트 언마운트 시 정리
   useEffect(() => {
@@ -240,20 +244,20 @@ export function ComposePanel() {
     e.target.value = "";
   }
 
-  async function changeGif() {
-    if (leavingForBrowse) return;
-    setLeavingForBrowse(true);
-    setBrowseError(null);
+  async function selectExamplePhoto() {
+    if (!example || samplePhotoLoading) return;
+    setSamplePhotoLoading(true);
+    setFileError(null);
     try {
-      if (photoFile) await setPendingPhoto(photoFile);
-      if (gif) localStorage.setItem("compose_gif", JSON.stringify(gif));
-    } catch {
-      setBrowseError("선택한 사진을 보관하지 못했어요. 다시 눌러주세요.");
-      setLeavingForBrowse(false);
-      return;
-    }
-    router.push("/?browse=1", { scroll: false });
-    setLeavingForBrowse(false);
+      const response = await fetch(example.target);
+      if (!response.ok) throw new Error("예시 사진을 불러오지 못했어요. 다시 눌러주세요.");
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) throw new Error("예시 사진을 확인하지 못했어요.");
+      setPhotoFromFile(new File([blob], `${example.id}-example.png`, { type: blob.type }));
+      trackEvent("photo_selected", { source: "example", example: example.id });
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "예시 사진을 불러오지 못했어요.");
+    } finally { setSamplePhotoLoading(false); }
   }
 
   async function handleCompose(confirmed = false) {
@@ -415,42 +419,12 @@ export function ComposePanel() {
               </div>
             </div>
           )}
-          <h1 className="sr-only">GIF 합성</h1>
-          <div className={styles.ingredients}>
-            <div className={styles.source} role="group" aria-label="선택한 원본 GIF">
-              <div className={styles.caption}>
-                <h2>{gif ? "원본 GIF" : "GIF를 골라주세요"}</h2>
-                <button type="button" className={styles.textAction} disabled={leavingForBrowse} onClick={() => void changeGif()}>{gif ? "바꾸기" : "GIF 고르기"}</button>
-              </div>
-              <div className={styles.sourceMedia}>
-                {gif ? <img src={getGifUrl(gif, "md")} alt="selected gif" /> : <ImageIcon aria-hidden="true" />}
-              </div>
-              {browseError && <p className={styles.error} role="alert">{browseError}</p>}
-            </div>
-            <section className={styles.photoSection} aria-labelledby="compose-photo-title">
-              <div className={styles.caption}>
-                <h2 id="compose-photo-title">{myPhoto ? "넣은 사진" : "사진을 넣어보세요"}</h2>
-                {myPhoto && <div className={styles.photoActions}>
-                  <button type="button" className={styles.textAction} disabled={leavingForBrowse} onClick={() => {
-                    trackEvent("photo_change_clicked"); fileInputRef.current?.click();
-                  }}>바꾸기</button>
-                  <button type="button" className={styles.removePhoto} disabled={leavingForBrowse} aria-label="사진 삭제" onClick={clearPhoto}><CrossCircledIcon aria-hidden="true" /></button>
-                </div>}
-              </div>
-              <input ref={fileInputRef} type="file" accept="image/*" disabled={leavingForBrowse} onChange={handleFileChange} className="hidden" aria-label="합성할 사진" />
-              <div className={`${styles.photoSlot} ${myPhoto ? styles.photoFilled : ""}`}>
-                {myPhoto ? <div className={styles.photoPreview}>
-                  <img src={myPhoto} alt="my photo" onLoad={() => trackEvent("photo_preview_loaded")} onError={() => trackEvent("photo_preview_failed")} />
-                </div> : <div className={styles.photoBody}>
-                  <button type="button" className={styles.photoPick} disabled={leavingForBrowse} aria-label="사진 고르기" aria-describedby="compose-photo-guidance" onClick={() => {
-                    trackEvent("photo_picker_opened"); fileInputRef.current?.click();
-                  }}><PlusIcon className={styles.photoAddIcon} aria-hidden="true" /><ImageIcon aria-hidden="true" /></button>
-                  <p id="compose-photo-guidance" className={styles.guidance}>대상이 잘 보이는 사진을 골라주세요.</p>
-                </div>}
-              </div>
-              {fileError && <p className={styles.error} role="alert">{fileError}</p>}
-            </section>
-          </div>
+          <ComposeInputs gif={gif} photo={myPhoto} example={example} busy={samplePhotoLoading}
+            onScene={next => { setGif(next); trackEvent("gif_selection_changed", { action: "changed", surface: "compose", photo_preserved: Boolean(photoFile) }); }}
+            onUpload={() => { trackEvent(myPhoto ? "photo_change_clicked" : "photo_picker_opened"); fileInputRef.current?.click(); }}
+            onSample={() => void selectExamplePhoto()} onClearPhoto={clearPhoto} />
+          <input ref={fileInputRef} type="file" accept="image/*" disabled={samplePhotoLoading} onChange={handleFileChange} className="hidden" aria-label="합성할 사진" />
+          {fileError && <p className={styles.error} role="alert">{fileError}</p>}
           <div className={styles.completion}>
             {!hasUserSession && !sessionError && <p role="status" className={styles.sessionNotice}>체험을 준비하고 있어요. 먼저 사진을 골라도 좋아요.</p>}
             {sessionError && <div role="alert" className={styles.error}>
@@ -470,7 +444,7 @@ export function ComposePanel() {
               </fieldset> : <div className={styles.policyRow}><Link href="/privacy" target="_blank" className={styles.policy}>사진 처리 안내</Link></div>}
               {myPhoto && <div className={styles.submit}>
                 <button type="button" onClick={() => { beginCompositionAttempt(); trackEvent("compose_clicked"); void handleCompose(); }}
-                  disabled={!gif || !hasUserSession || !consentReady || leavingForBrowse} className={styles.makeButton}>만들기</button>
+                  disabled={!gif || !hasUserSession || !consentReady || samplePhotoLoading} className={styles.makeButton}>만들기</button>
                 <p>이번 만들기에 1회 사용</p>
               </div>}
             </div>

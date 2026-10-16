@@ -63,7 +63,7 @@ export function HeaderActions({ onLogin, compact = false }: Props) {
             }}
             className="hidden rounded-full border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-sm font-bold text-purple-100 transition-colors hover:bg-purple-500/20 sm:block"
           >
-            구매
+            이용권
           </Link>}
           {compact ? <><Link href="/my-assets" className="text-action text-sm whitespace-nowrap">내 결과</Link>{isLoggedIn && <UserMenu />}</> : isLoggedIn ? <UserMenu /> : <>
             <Link href="/my-assets" className="text-sm text-white/70">내 결과</Link>

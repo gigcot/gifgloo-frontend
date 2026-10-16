@@ -214,7 +214,7 @@ export function PaymentChargeClient() {
           <p className="font-semibold text-white">현재 제공 중인 서비스</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>업로드한 사진 1장과 선택한 GIF를 AI로 합성해 새로운 GIF 결과물을 제작합니다.</li>
-            <li>OpenAI GPT Image 1.5 기반 기술을 사용하며, 합성 요청 1건마다 이용권 1회가 사용됩니다.</li>
+            <li>OpenAI GPT Image를 사용하며, 합성 요청 1건마다 이용권 1회가 사용됩니다.</li>
             <li>GIF는 최대 20프레임으로 처리되며, 작업은 통상 2~3분 소요됩니다.</li>
             <li>완료된 결과물은 내 에셋에서 확인, 다운로드 및 공유할 수 있습니다.</li>
             <li>결과물 수정 기능은 현재 제공하지 않습니다.</li>

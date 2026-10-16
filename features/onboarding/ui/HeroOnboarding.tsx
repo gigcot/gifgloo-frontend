@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowRightIcon, ChevronRightIcon, Cross2Icon, PauseIcon, PlayIcon, PlusIcon } from "@radix-ui/react-icons";
 import { trackEvent } from "@/shared/lib/umami";
-import { onboardingStories } from "../model/stories";
+import { onboardingStories, type OnboardingStory } from "../model/stories";
 import styles from "./HeroOnboarding.module.css";
 
 const motionQuery = "(prefers-reduced-motion: reduce)";
@@ -32,7 +32,7 @@ function StoryMedia({ src, alt, poster, motion }: { src: string; alt: string; po
   </>;
 }
 
-export function HeroOnboarding({ onStart }: { onStart: () => void }) {
+export function HeroOnboarding({ onStart }: { onStart: (story: OnboardingStory) => void }) {
   const [position, setPosition] = useState({ story: 0, phase: 0 });
   const [paused, setPaused] = useState(false);
   const [hovering, setHovering] = useState(false);
@@ -112,7 +112,7 @@ export function HeroOnboarding({ onStart }: { onStart: () => void }) {
     pause();
     dialogRef.current?.close();
     trackEvent("home_choose_gif_clicked");
-    onStart();
+    onStart(story);
   }
 
   const phaseName = { source: "원본과 사진", result: "합성 결과", chat: "대화에서 사용" }[phase.name];
@@ -137,7 +137,7 @@ export function HeroOnboarding({ onStart }: { onStart: () => void }) {
           </div>
           <div className={styles.storyMedia}>
             <div className={styles.result} aria-hidden={phase.name === "source"}><StoryMedia src={story.result} alt={story.resultAlt} poster={story.poster} motion={motion && inView && phase.name !== "source"} /></div>
-            <div className={styles.source} aria-hidden={phase.name !== "source"}><StoryMedia src={story.source} alt={story.sourceAlt} poster={story.sourcePoster} motion={motion && inView && phase.name === "source"} /></div>
+            <div className={styles.source} aria-hidden={phase.name !== "source"}><StoryMedia src={story.sourceVideo} alt={story.sourceAlt} poster={story.sourcePoster} motion={motion && inView && phase.name === "source"} /></div>
           </div>
           <span className={styles.storyLabel}>{phase.label}</span>
           <figure className={styles.photo} aria-hidden={phase.showPhoto === false}>
@@ -175,7 +175,7 @@ export function HeroOnboarding({ onStart }: { onStart: () => void }) {
       <h2 id="onboarding-how-title">장면을 고르고, 사진을 넣으면.</h2>
       <p id="onboarding-how-description" className={styles.description}>{story.description}</p>
       {howOpen && <div className={styles.recipe}>
-        <figure><div><StoryMedia src={story.source} alt={story.sourceAlt} poster={story.sourcePoster} motion={motion} /></div><figcaption>1. 고른 원본 GIF</figcaption></figure>
+        <figure><div><StoryMedia src={story.sourceVideo} alt={story.sourceAlt} poster={story.sourcePoster} motion={motion} /></div><figcaption>1. 고른 원본 GIF</figcaption></figure>
         <PlusIcon className={styles.operator} aria-hidden="true" />
         <figure><div><img src={story.target} alt={`짤에 넣은 사진: ${story.targetName}`} /></div><figcaption>2. 넣은 사진</figcaption></figure>
         <ArrowRightIcon className={`${styles.operator} ${styles.resultArrow}`} aria-hidden="true" />

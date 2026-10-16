@@ -19,9 +19,11 @@ type Props = {
   onBoundary?: (delta: number) => void;
   footer?: React.ReactNode;
   selectionBar?: React.ReactNode;
+  initialSearch?: string;
+  intro?: React.ReactNode;
 };
 
-export function GifExplorer({ selectedId, onSelect, surface, onSourceChange, onBoundary, footer, selectionBar }: Props) {
+export function GifExplorer({ selectedId, onSelect, surface, onSourceChange, onBoundary, footer, selectionBar, initialSearch, intro }: Props) {
   const browser = useGifBrowser(surface);
   const { state } = browser;
   const [categories, setCategories] = useState<GifBrowseCategory[]>([]);
@@ -40,6 +42,13 @@ export function GifExplorer({ selectedId, onSelect, surface, onSourceChange, onB
   const queryInput = useRef<HTMLInputElement>(null);
   const tips = useRef<HTMLDetailsElement>(null);
   const restored = useRef(false);
+  const searchInitialized = useRef(false);
+  useEffect(() => {
+    if (!state.hydrated || searchInitialized.current || initialSearch === undefined) return;
+    searchInitialized.current = true;
+    browser.search(initialSearch, initialSearch || "지금 둘러볼 장면");
+    queryInput.current?.focus({ preventScroll: true });
+  }, [state.hydrated, initialSearch, browser]);
   const category = categories.find(item => item.id === state.categoryId);
   const source = state.categoryId ? "category" : state.query ? "search" : "trending";
   const matches = suggesting ? findTopicMatches(categories, state.input).slice(0, 6) : [];
@@ -157,7 +166,11 @@ export function GifExplorer({ selectedId, onSelect, surface, onSourceChange, onB
     {categories.map(item => <button key={item.id} type="button" aria-pressed={state.categoryId === item.id} onClick={() => showCategory(item)}>{item.label}</button>)}
   </>;
 
-  return <div className={styles.root} data-surface={surface} data-sidebar-collapsed={sidebarCollapsed}>
+  return <div className={styles.root} data-surface={surface} data-sidebar-collapsed={sidebarCollapsed}
+    ref={surface === "compose" ? main : undefined}
+    data-contained-scroll={surface === "compose" || undefined} data-gif-scroll-container={surface === "compose" || undefined}
+    tabIndex={surface === "compose" ? 0 : undefined} role={surface === "compose" ? "region" : undefined} aria-label={surface === "compose" ? "장면 목록" : undefined}>
+    {intro}
     <div className={styles.orientation}><p className={styles.orientationHint}>넣고 싶은 대상을 떠올리며 둘러보세요.</p>
       <div className={styles.orientationActions}><details ref={tips} className={styles.tips}><summary>고르는 팁</summary><div><p>표정이나 동작의 변화가 눈에 보이는 장면을 골라보세요.</p><p>넣을 대상이 그 움직임을 한다고 상상해보세요. 대상의 모습이 잘 보이는지도 함께 확인해보세요.</p></div></details></div>
     </div>
@@ -182,7 +195,9 @@ export function GifExplorer({ selectedId, onSelect, surface, onSourceChange, onB
     <div className={styles.layout}>
       <aside id={sidebarId} ref={sidebar} hidden={sidebarCollapsed} className={styles.sidebar} data-contained-scroll data-gif-sidebar><nav aria-label="GIF 분류">{categoryButtons}</nav></aside>
       <div className={styles.resultsPane}>
-      <div ref={main} className={styles.main} data-contained-scroll data-gif-scroll-container tabIndex={0} role="region" aria-label="장면 목록">
+      <div ref={surface === "home" ? main : undefined} className={styles.main}
+        data-contained-scroll={surface === "home" || undefined} data-gif-scroll-container={surface === "home" || undefined}
+        tabIndex={surface === "home" ? 0 : undefined} role={surface === "home" ? "region" : undefined} aria-label={surface === "home" ? "장면 목록" : undefined}>
         <div className={styles.location} hidden={state.view !== "results" || !category}>
           <div>{state.view === "results" && category && <button className={styles.backTopics} type="button" onClick={() => showCategory(category)}>{category.label} · 모든 주제 보기</button>}</div>
 
