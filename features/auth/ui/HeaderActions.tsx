@@ -42,7 +42,7 @@ export function HeaderActions({ onLogin, compact = false }: Props) {
   if (hasUserSession) {
     return (
       <>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="header-actions ml-auto flex min-w-0 items-center gap-3">
           <CreditsBadge compact={compact} anonymous={!isLoggedIn} />
           {showSurveyCta && !compact && (
             <button
