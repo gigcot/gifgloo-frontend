@@ -54,6 +54,7 @@ for (const width of [320, 393, 1280]) test(`example, keyword search, photo prese
   await page.setViewportSize({ width, height: 900 });
   await page.goto("/compose?example=face-online");
   await expect(page.getByAltText("예시에 쓰인 사진")).toBeVisible();
+  await expect(page.getByRole("button", { name: "장면 옵션", exact: true })).toBeVisible();
   await page.screenshot({ path: `qa/example-compose/entry-${width}.png`, fullPage: true });
   await page.getByRole("button", { name: "예시 사진으로 먼저 해보기", exact: true }).click();
   await expect(page.getByAltText("my photo")).toBeVisible();
@@ -78,8 +79,8 @@ for (const width of [320, 393, 1280]) test(`example, keyword search, photo prese
   await expect(page.getByAltText("selected gif")).toHaveAttribute("src", "/icon.png");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await expect.poll(() => state.submissions, { timeout: 15_000 }).toEqual([{ gif_url: "/icon.png", upload_id: "example-upload", acknowledge_frame_reduction: false }]);
   await expect(page.getByRole("heading", { name: "완성됐어요!" })).toBeVisible();
-  expect(state.submissions).toEqual([{ gif_url: "/icon.png", upload_id: "example-upload", acknowledge_frame_reduction: false }]);
 });
 
 test("the approved example submits its public source GIF only after an explicit make action", async ({ page }) => {
@@ -94,8 +95,8 @@ test("the approved example submits its public source GIF only after an explicit 
   expect(source.ok()).toBe(true);
   expect((await source.body()).subarray(0, 6).toString()).toMatch(/^GIF8[79]a$/);
   await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await expect.poll(() => state.submissions, { timeout: 15_000 }).toEqual([{ gif_url: sourceUrl, upload_id: "example-upload", acknowledge_frame_reduction: false }]);
   await expect(page.getByRole("heading", { name: "완성됐어요!" })).toBeVisible();
-  expect(state.submissions).toEqual([{ gif_url: sourceUrl, upload_id: "example-upload", acknowledge_frame_reduction: false }]);
 });
 
 test("closing scene selection and a failed sample photo leave inputs usable", async ({ page }) => {
