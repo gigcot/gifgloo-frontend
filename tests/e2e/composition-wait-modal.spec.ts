@@ -87,7 +87,7 @@ test("shows a countdown modal and retries composition when the wait ends", async
 
   await page.clock.install({ time: new Date("2026-10-07T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-10-07T00:00:01Z"));
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
 
   const waitDialog = page.getByRole("dialog");
   await expect(waitDialog).toBeVisible();

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { runAfterCompositionFeedback } from "@/shared/lib/composition-feedback-guard";
 
 type HeaderProps = {
@@ -9,9 +10,10 @@ type HeaderProps = {
   showBack?: boolean;
   action?: React.ReactNode;
   firstExperience?: boolean;
+  onFindScene?: () => void;
 };
 
-export function Header({ title, showBack, action, firstExperience = false }: HeaderProps) {
+export function Header({ title, showBack, action, firstExperience = false, onFindScene }: HeaderProps) {
   const router = useRouter();
 
   return (
@@ -49,10 +51,10 @@ export function Header({ title, showBack, action, firstExperience = false }: Hea
           </>
         )}
 
-        <Link href="/?browse=1" className="header-explore" onClick={event => {
+        {onFindScene ? <button type="button" className="header-explore" onClick={onFindScene}><MagnifyingGlassIcon aria-hidden="true" />장면 찾기</button> : <Link href="/?browse=1" className="header-explore" onClick={event => {
           event.preventDefault();
           runAfterCompositionFeedback(() => router.push("/?browse=1"));
-        }}>탐색</Link>
+        }}><MagnifyingGlassIcon aria-hidden="true" />장면 찾기</Link>}
 
         {action && <div className="contents">{action}</div>}
       </div>

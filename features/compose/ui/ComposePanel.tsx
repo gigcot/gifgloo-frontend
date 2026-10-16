@@ -30,6 +30,8 @@ import { requestExp001SurveyOpen } from "@/features/experiment/model/exp-001-sur
 import { onboardingStories } from "@/features/onboarding/model/stories";
 import { presetGif, scenePresets } from "@/features/gif-search/model/scene-presets";
 import { ComposeInputs } from "./ComposeInputs";
+import { Header } from "@/shared/ui/Header";
+import { HeaderActions } from "@/features/auth/ui/HeaderActions";
 import styles from "./ComposePanel.module.css";
 
 type Stage = "ready" | "processing" | "done" | "error";
@@ -61,6 +63,7 @@ export function ComposePanel() {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [showInsufficientPass, setShowInsufficientPass] = useState(false);
   const [samplePhotoLoading, setSamplePhotoLoading] = useState(false);
+  const [scenePicker, setScenePicker] = useState<"browse" | "search" | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [compositionWait, setCompositionWait] = useState<CompositionWait | null>(null);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
@@ -378,8 +381,14 @@ export function ComposePanel() {
     router.push("/payment/charge");
   }
 
+  function openScenePicker(mode: "browse" | "search") {
+    setScenePicker(mode);
+    trackEvent("scene_picker_opened", { mode, has_photo: Boolean(myPhoto), example: example?.id ?? "none" });
+  }
+
   return (
     <>
+    <Header firstExperience showBack action={<HeaderActions compact />} onFindScene={visibleStage === "ready" ? () => openScenePicker("browse") : undefined} />
     <main ref={mainRef}>
 
       {/* ── 준비 상태 ── */}
@@ -420,6 +429,7 @@ export function ComposePanel() {
             </div>
           )}
           <ComposeInputs gif={gif} photo={myPhoto} example={example} busy={samplePhotoLoading}
+            picker={scenePicker} onOpenPicker={openScenePicker} onClosePicker={() => setScenePicker(null)}
             onScene={next => { setGif(next); trackEvent("gif_selection_changed", { action: "changed", surface: "compose", photo_preserved: Boolean(photoFile) }); }}
             onUpload={() => { trackEvent(myPhoto ? "photo_change_clicked" : "photo_picker_opened"); fileInputRef.current?.click(); }}
             onSample={() => void selectExamplePhoto()} onClearPhoto={clearPhoto} />
@@ -444,8 +454,8 @@ export function ComposePanel() {
               </fieldset> : <div className={styles.policyRow}><Link href="/privacy" target="_blank" className={styles.policy}>사진 처리 안내</Link></div>}
               {myPhoto && <div className={styles.submit}>
                 <button type="button" onClick={() => { beginCompositionAttempt(); trackEvent("compose_clicked"); void handleCompose(); }}
-                  disabled={!gif || !hasUserSession || !consentReady || samplePhotoLoading} className={styles.makeButton}>만들기</button>
-                <p>이번 만들기에 1회 사용</p>
+                  disabled={!gif || !hasUserSession || !consentReady || samplePhotoLoading} className={styles.makeButton}>합성하기</button>
+                <p>이번 합성에 1회 사용</p>
               </div>}
             </div>
           </div>

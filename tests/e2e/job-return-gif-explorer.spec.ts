@@ -61,7 +61,7 @@ async function setup(page: Page) {
 
 async function submit(page: Page) {
   await page.goto("/");
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   await page.getByRole("button", { name: "trending-1-0 선택", exact: true }).click();
   await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
@@ -69,7 +69,7 @@ async function submit(page: Page) {
   await expect(page.getByAltText("my photo")).toHaveCount(0);
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
   await expect(page.getByAltText("my photo")).toBeVisible();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose\?job=return-job$/);
 }
 
@@ -81,7 +81,7 @@ test("accepted job survives My Results, browser back, reload and direct return w
   await page.goBack();
   await expect(page).toHaveURL(/\/compose\?job=return-job$/);
   await expect(page.getByRole("heading", { name: "GIF를 만들고 있어요" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("heading", { name: "GIF를 만들고 있어요" })).toBeVisible();
   state.status = "COMPLETED";
@@ -144,7 +144,7 @@ test("return without a session does not create a new anonymous identity or consu
 for (const source of ["trending", "search", "category"]) test(`${source} uses explicit load more; scroll never fetches and failed page retries in place`, async ({ page }) => {
   const state = await setup(page);
   await page.goto("/");
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   if (source === "search") {
     const search = page.getByRole("searchbox", { name: "GIF 검색" });
     await search.fill("cat");
@@ -182,7 +182,7 @@ for (const source of ["trending", "search", "category"]) test(`${source} uses ex
 test("query switch ignores late pagination from the previous search", async ({ page }) => {
   const state = await setup(page);
   await page.goto("/");
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   const search = page.getByRole("searchbox", { name: "GIF 검색" });
   await search.fill("cat");
   await search.press("Enter");
@@ -213,7 +213,7 @@ for (const width of [320, 1440]) test(`changing scene stays in compose and retai
   const targetBounds = await target.boundingBox();
   expect(targetBounds!.x).toBeGreaterThan(sourceBounds!.x + sourceBounds!.width);
   expect(targetBounds!.y).toBe(sourceBounds!.y);
-  await page.getByRole("button", { name: "장면 옵션", exact: true }).click();
+  await page.getByRole("button", { name: "장면 바꾸기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "다른 장면 둘러보기", exact: false }).click();
@@ -225,11 +225,11 @@ for (const width of [320, 1440]) test(`changing scene stays in compose and retai
   await expect(photo).toHaveAttribute("src", photoUrl!);
   await expect(source.locator("video")).toHaveAttribute("src", "/examples/scenes/gatsby-toast.mp4");
   await page.getByRole("button", { name: "사진 삭제", exact: true }).click();
-  await page.getByRole("button", { name: "장면 옵션", exact: true }).click();
+  await page.getByRole("button", { name: "장면 바꾸기", exact: true }).click();
   await page.getByRole("button", { name: "다른 장면 둘러보기", exact: false }).click();
   await page.getByRole("button", { name: "쉴 틈 없는 타자 선택", exact: true }).click();
   await expect(photo).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "사진 넣기", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   expect(state.submissions).toBe(0);
 });
@@ -267,7 +267,7 @@ for (const width of [320, 1280]) test(`Korean initial suggestions include Englis
 test("Korean topic help submits an English query and history back restores loaded browsing results", async ({ page }) => {
   const state = await setup(page);
   await page.goto("/");
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   const search = page.getByRole("searchbox", { name: "GIF 검색" });
   await search.fill("춤추기");
   await page.getByRole("group", { name: "연결할 수 있는 검색어", exact: true }).getByRole("button", { name: /춤추기/ }).click();
@@ -311,7 +311,7 @@ test("direct accepted-job return is measured separately from a new compose entry
   const events = await page.evaluate(() => JSON.parse(sessionStorage.getItem("explorer_events")!)) as { name: string; data: { flow_origin: string; experience_version: string } }[];
   expect(events.some(event => event.name === "compose_viewed")).toBe(false);
   expect(events.find(event => event.name === "composition_resume_opened")?.data.flow_origin).toBe("result_return");
-  expect(events.find(event => event.name === "composition_job_status_viewed")?.data.experience_version).toBe("example-compose-v5");
+  expect(events.find(event => event.name === "composition_job_status_viewed")?.data.experience_version).toBe("example-compose-v6");
 });
 
 test("a failed first search retries the same query instead of discarding the browsing intent", async ({ page }) => {

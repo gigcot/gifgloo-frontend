@@ -47,7 +47,7 @@ export function updateJourneyVisibility(): void {
 export function journeyContext(): Record<string, string | number | boolean> {
   const flow = current();
   return {
-    experience_version: "example-compose-v5",
+    experience_version: "example-compose-v6",
     flow_id: flow.flow_id, flow_origin: flow.origin,
     flow_elapsed_ms: Math.max(0, Date.now() - flow.started_at),
     flow_visible_ms: flow.visible_ms + (visibleSince === null ? 0 : Date.now() - visibleSince),

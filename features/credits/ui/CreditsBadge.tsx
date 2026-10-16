@@ -24,7 +24,7 @@ export function CreditsBadge({ compact = false, anonymous = false }: { compact?:
   return (
     <div className="text-right" title={expiration ? `첫 만료 ${expiration} (한국 시간)` : undefined}>
       <p className={compact ? "whitespace-nowrap text-[12px] sm:text-base" : "text-sm font-bold text-white sm:text-base"}>
-        {anonymous ? "비회원 · " : ""}사용 가능 {state.remainingUses.toLocaleString()}회
+        {anonymous && <span className={compact ? "compact-credit-identity" : undefined}>비회원 · </span>}사용 가능 {state.remainingUses.toLocaleString()}회
       </p>
       {expiration && !compact && (
         <p className="text-[10px] text-white/40 sm:text-[11px]">첫 만료 {expiration} (한국 시간)</p>
