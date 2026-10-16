@@ -49,6 +49,11 @@ export function Header({ title, showBack, action, firstExperience = false }: Hea
           </>
         )}
 
+        <Link href="/?browse=1" className="header-explore" onClick={event => {
+          event.preventDefault();
+          runAfterCompositionFeedback(() => router.push("/?browse=1"));
+        }}>탐색</Link>
+
         {action && <div className="contents">{action}</div>}
       </div>
     </header>

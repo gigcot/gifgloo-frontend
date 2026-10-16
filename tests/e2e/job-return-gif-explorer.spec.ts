@@ -61,7 +61,7 @@ async function setup(page: Page) {
 
 async function submit(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   await page.getByRole("button", { name: "trending-1-0 선택", exact: true }).click();
   await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
@@ -122,7 +122,7 @@ for (const access of [401, 403, 404]) test(`inaccessible job ${access} does not 
   await expect(page.getByAltText("합성 결과")).toHaveCount(0);
   if (access === 403) {
     await page.getByRole("button", { name: "새로 만들기", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "사진을 넣어보세요" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "주인공으로 넣을 사진" })).toBeVisible();
     const events = await page.evaluate(() => JSON.parse(sessionStorage.getItem("explorer_events")!)) as { name: string }[];
     expect(events.some(event => event.name === "composition_retry_clicked")).toBe(false);
   }
@@ -144,7 +144,7 @@ test("return without a session does not create a new anonymous identity or consu
 for (const source of ["trending", "search", "category"]) test(`${source} uses explicit load more; scroll never fetches and failed page retries in place`, async ({ page }) => {
   const state = await setup(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   if (source === "search") {
     const search = page.getByRole("searchbox", { name: "GIF 검색" });
     await search.fill("cat");
@@ -182,7 +182,7 @@ for (const source of ["trending", "search", "category"]) test(`${source} uses ex
 test("query switch ignores late pagination from the previous search", async ({ page }) => {
   const state = await setup(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   const search = page.getByRole("searchbox", { name: "GIF 검색" });
   await search.fill("cat");
   await search.press("Enter");
@@ -197,76 +197,41 @@ test("query switch ignores late pagination from the previous search", async ({ p
   await expect(page.getByRole("button", { name: /^cat-/ })).toHaveCount(0);
 });
 
-for (const width of [320, 1440]) test(`changing GIF returns to prior browsing and retains the photo at ${width}px`, async ({ page }) => {
+for (const width of [320, 1440]) test(`changing scene stays in compose and retains the photo at ${width}px`, async ({ page }) => {
   const state = await setup(page);
   await page.setViewportSize({ width, height: 900 });
   await page.goto("/?browse=1");
-  if (width < 700) {
-    await page.getByRole("button", { name: "카테고리 선택", exact: true }).click();
-    await page.getByRole("dialog", { name: "GIF 분류", exact: true }).getByRole("button", { name: "동작", exact: true }).click();
-  } else {
-    await page.getByRole("navigation", { name: "GIF 분류" }).getByRole("button", { name: "동작", exact: true }).click();
-  }
-  await page.getByRole("button", { name: "춤추기 GIF 둘러보기", exact: true }).click();
-  await page.getByRole("button", { name: "더 둘러보기", exact: true }).click();
-  const choices = page.getByTestId("gif-results").locator(".gif-choice");
-  await expect(choices).toHaveCount(48);
-  const original = page.getByRole("button", { name: "dancing-2-20 선택", exact: true });
-  await original.scrollIntoViewIfNeeded();
-  await original.click();
-  const scrollHost = page.locator('[data-gif-scroll-container]');
-  const scrollBefore = await scrollHost.evaluate(element => element.scrollTop);
-  expect(scrollBefore).toBeGreaterThan(0);
-  const selection = page.getByRole("group", { name: "선택한 GIF", exact: true });
-  await selection.getByRole("button", { name: "사진 고르기", exact: true }).click();
-  await expect(page).toHaveURL(/\/compose$/);
+  await page.getByRole("button", { name: "trending-1-0 선택", exact: true }).click();
+  await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
   const photo = page.getByAltText("my photo");
   await expect(photo).toBeVisible();
-  const photoBytes = await photo.evaluate(async image => Array.from(new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer())));
+  const photoUrl = await photo.getAttribute("src");
   const source = page.getByRole("group", { name: "선택한 원본 GIF", exact: true });
-  const target = page.getByRole("region", { name: "넣은 사진", exact: true });
+  const target = page.getByRole("group", { name: "주인공 사진", exact: true });
   const sourceBounds = await source.boundingBox();
   const targetBounds = await target.boundingBox();
-  if (width < 700) {
-    expect(targetBounds!.y).toBeGreaterThanOrEqual(sourceBounds!.y + sourceBounds!.height);
-  } else {
-    expect(targetBounds!.x).toBeGreaterThanOrEqual(sourceBounds!.x + sourceBounds!.width);
-    expect(targetBounds!.y).toBe(sourceBounds!.y);
-  }
-  const requestCount = state.gifRequests.length;
-  const change = source.getByRole("button", { name: "바꾸기", exact: true });
-  await change.click();
-  await expect(page).toHaveURL(/\/\?browse=1$/);
-  await expect(page.getByRole("dialog", { name: "GIF 고르기", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("searchbox", { name: "GIF 검색" })).toHaveValue("춤추기");
-  await expect(page.getByRole("button", { name: "동작 · 모든 주제 보기", exact: true })).toBeVisible();
-  await expect(choices).toHaveCount(48);
-  await expect.poll(() => scrollHost.evaluate(element => element.scrollTop)).toBe(scrollBefore);
-  expect(state.gifRequests).toHaveLength(requestCount);
-  await page.getByRole("button", { name: "dancing-2-21 선택", exact: true }).click();
-  await selection.getByRole("button", { name: "사진 고르기", exact: true }).click();
+  expect(targetBounds!.x).toBeGreaterThan(sourceBounds!.x + sourceBounds!.width);
+  expect(targetBounds!.y).toBe(sourceBounds!.y);
+  await page.getByRole("button", { name: "장면 옵션", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
-  await expect(page.getByAltText("selected gif")).toHaveAttribute("src", "/icon.png?gif=dancing-2-21");
-  await expect(photo).toBeVisible();
-  expect(await photo.evaluate(async image => Array.from(new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer())))).toEqual(photoBytes);
-  await expect(photo).toHaveCSS("object-fit", "contain");
-  const photoBounds = await photo.boundingBox();
-  const restoredTarget = await target.boundingBox();
-  expect(Math.abs(photoBounds!.x + photoBounds!.width / 2 - restoredTarget!.x - restoredTarget!.width / 2)).toBeLessThan(1);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "다른 장면 둘러보기", exact: false }).click();
+  const sheet = page.getByRole("dialog", { name: "어떤 모습을 만들어볼까요?", exact: true });
+  await expect(sheet.getByRole("group", { name: "추천 검색어" }).getByRole("button")).toHaveCount(6);
+  await sheet.getByRole("button", { name: "건배", exact: true }).click();
+  await sheet.getByRole("button", { name: "너를 위해 건배 선택", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(photo).toHaveAttribute("src", photoUrl!);
+  await expect(source.locator("video")).toHaveAttribute("src", "/examples/scenes/gatsby-toast.mp4");
+  await page.getByRole("button", { name: "사진 삭제", exact: true }).click();
+  await page.getByRole("button", { name: "장면 옵션", exact: true }).click();
+  await page.getByRole("button", { name: "다른 장면 둘러보기", exact: false }).click();
+  await page.getByRole("button", { name: "쉴 틈 없는 타자 선택", exact: true }).click();
+  await expect(photo).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   expect(state.submissions).toBe(0);
-
-  // A removed photo must not reappear on another round trip.
-  await page.getByRole("button", { name: "사진 삭제", exact: true }).click();
-  await change.click();
-  await expect(page).toHaveURL(/\/\?browse=1$/);
-  await page.getByRole("button", { name: "dancing-2-22 선택", exact: true }).click();
-  await selection.getByRole("button", { name: "사진 고르기", exact: true }).click();
-  await expect(page).toHaveURL(/\/compose$/);
-  await expect(page.getByAltText("selected gif")).toHaveAttribute("src", "/icon.png?gif=dancing-2-22");
-  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
-  await expect(photo).toHaveCount(0);
 });
 
 for (const width of [320, 1280]) test(`Korean initial suggestions include English guidance and submit the selected English query at ${width}px`, async ({ page }) => {
@@ -302,7 +267,7 @@ for (const width of [320, 1280]) test(`Korean initial suggestions include Englis
 test("Korean topic help submits an English query and history back restores loaded browsing results", async ({ page }) => {
   const state = await setup(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   const search = page.getByRole("searchbox", { name: "GIF 검색" });
   await search.fill("춤추기");
   await page.getByRole("group", { name: "연결할 수 있는 검색어", exact: true }).getByRole("button", { name: /춤추기/ }).click();
@@ -346,7 +311,7 @@ test("direct accepted-job return is measured separately from a new compose entry
   const events = await page.evaluate(() => JSON.parse(sessionStorage.getItem("explorer_events")!)) as { name: string; data: { flow_origin: string; experience_version: string } }[];
   expect(events.some(event => event.name === "compose_viewed")).toBe(false);
   expect(events.find(event => event.name === "composition_resume_opened")?.data.flow_origin).toBe("result_return");
-  expect(events.find(event => event.name === "composition_job_status_viewed")?.data.experience_version).toBe("onboarding-browser-v4");
+  expect(events.find(event => event.name === "composition_job_status_viewed")?.data.experience_version).toBe("example-compose-v5");
 });
 
 test("a failed first search retries the same query instead of discarding the browsing intent", async ({ page }) => {

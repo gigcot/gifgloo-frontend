@@ -11,7 +11,7 @@ export default function ServiceGuidePage() {
         <h2 className="text-base font-bold text-white">AI 기반 GIF 이미지 합성</h2>
         <p className="mt-3">
           업로드한 사진 1장과 선택한 GIF를 AI로 합성해 새로운 GIF 결과물을 제작하는 서비스입니다.
-          현재 GIF 이미지 합성에는 OpenAI GPT Image 1.5 기반 기술을 사용합니다.
+          현재 GIF 이미지 합성에는 OpenAI GPT Image를 사용합니다.
         </p>
       </section>
 

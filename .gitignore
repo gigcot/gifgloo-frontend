@@ -51,3 +51,4 @@ next-env.d.ts
 /prototypes/onboarding-preview/
 /public/examples/onboarding-local/
 /qa/onboarding-integration/
+/qa/example-compose/

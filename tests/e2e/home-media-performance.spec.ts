@@ -122,7 +122,7 @@ test("loads only the active story, defers GIF discovery and deduplicates auth lo
   await expect.poll(() => mediaRequests.some(pathname => !firstSources.includes(pathname))).toBe(true);
   expect(gifRequests).toBe(0);
 
-  await hero.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   await expect(page.getByRole("searchbox", { name: "GIF 검색" })).toBeVisible();
   await expect.poll(() => gifRequests).toBe(1);
   await expect(page.getByRole("button", { name: "GIF 1 선택", exact: true })).toBeVisible();

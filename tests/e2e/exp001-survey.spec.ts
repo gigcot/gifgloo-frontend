@@ -61,7 +61,7 @@ test("eligible user submits the survey and receives refreshed credit balance", a
   const header = page.locator("header");
   const credit = header.getByText("사용 가능 2회");
   const surveyCta = header.getByRole("button", { name: "사용횟수 더 받기", exact: true });
-  const purchase = header.getByRole("link", { name: "구매", exact: true });
+  const purchase = header.getByRole("link", { name: "이용권", exact: true });
   await expect(credit).toBeVisible();
   await expect(surveyCta).toBeVisible();
   await expect(purchase).toBeVisible();
@@ -172,7 +172,7 @@ test("eligible mobile user sees the CTA as a second row inside the sticky header
   const logo = header.getByRole("link", { name: "gifgloo" });
   const surveyCta = header.getByRole("button", { name: "사용횟수 더 받기", exact: true });
   await expect(surveyCta).toBeVisible();
-  await expect(header.getByRole("link", { name: "구매", exact: true })).toBeHidden();
+  await expect(header.getByRole("link", { name: "이용권", exact: true })).toBeHidden();
 
   const logoBox = await logo.boundingBox();
   const surveyBox = await surveyCta.boundingBox();

@@ -63,7 +63,7 @@ async function setup(page: Page, permission: "granted" | "denied" = "granted", r
 
 async function compose(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   await page.getByRole("button", { name: "물 맞는 하마 선택", exact: true }).click();
   await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
@@ -76,7 +76,7 @@ async function compose(page: Page) {
 test("category topics retain provider order while the selection bar changes and clears the tentative GIF", async ({ page }) => {
   await setup(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   await page.getByRole("navigation", { name: "GIF 분류" }).getByRole("button", { name: "동작", exact: true }).click();
   await page.getByRole("button", { name: "춤추기 GIF 둘러보기", exact: true }).click();
   const choices = page.getByTestId("gif-results").locator(".gif-choice");
@@ -116,7 +116,7 @@ for (const control of ["selection_bar", "preview"] as const) test(`mobile ${cont
   page.on("filechooser", () => { filePickerOpened = true; });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   const choice = page.getByRole("button", { name: "물 맞는 하마 선택", exact: true });
   await choice.click();
   const selection = page.getByRole("group", { name: "선택한 GIF", exact: true });
@@ -199,7 +199,7 @@ for (const width of [320, 390, 768, 1440]) test(`capture actual first experience
   await expect(page.getByRole("button", { name: "어떻게 만드나요?", exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(captureDir, `home-${width}.png`) });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   await expect(page.getByText("넣고 싶은 대상을 떠올리며 둘러보세요.", { exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(captureDir, `browse-${width}.png`) });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -211,7 +211,7 @@ for (const width of [320, 390, 768, 1440]) test(`capture actual first experience
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await selection.getByRole("button", { name: "사진 고르기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
-  await expect(page.getByRole("heading", { name: "사진을 넣어보세요" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "주인공으로 넣을 사진" })).toBeVisible();
   await expect(page.getByAltText("selected gif")).toBeVisible();
   await expect(page.getByAltText("my photo")).toHaveCount(0);
   await page.locator('input[type="file"]').setInputFiles("public/examples/hippo-pets/dog.jpg");

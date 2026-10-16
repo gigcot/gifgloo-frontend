@@ -221,3 +221,12 @@
 
 @keyframes frame-turn { to { transform:rotate(360deg); } }
 @keyframes waiting-spin { to { transform:rotate(360deg); } }
+
+.header-explore { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 10px; color: #d1cbd8; font-size: 14px; white-space: nowrap; }
+.header-explore:focus-visible { outline: 2px solid #c27bff; outline-offset: 2px; border-radius: 6px; }
+@media (max-width: 400px) { .header-explore { padding: 0 5px; font-size: 12px; } }
+@media (max-width: 359px) {
+  .compose-header .header-actions { gap: 8px; }
+  .compose-header .header-actions > div { min-width: 0; }
+  .compose-header .header-actions p { white-space: normal; }
+}

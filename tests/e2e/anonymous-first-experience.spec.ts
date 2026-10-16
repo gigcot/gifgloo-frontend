@@ -64,10 +64,9 @@ async function setup(page: Page, mode: "normal" | "blocked" | "offline" = "norma
 async function openFromHome(page: Page) {
   await page.goto("/?utm_source=youtube&utm_campaign=exp001_run01");
   await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
-  await page.getByRole("button", { name: "Guest GIF 선택", exact: true }).click();
-  await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
-  await expect(page).toHaveURL(/\/compose$/);
-  await expect(page.getByAltText("selected gif")).toBeVisible();
+  await expect(page).toHaveURL(/\/compose\?example=dog-typing$/);
+  await expect(page.getByRole("group", { name: "선택한 원본 GIF", exact: true })).toBeVisible();
+  await expect(page.getByAltText("예시에 쓰인 사진")).toBeVisible();
   await expect(page.getByAltText("my photo")).toHaveCount(0);
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
   await expect(page.getByAltText("my photo")).toBeVisible();
@@ -227,7 +226,7 @@ for (const mode of ["blocked", "offline"] as const) {
 test("preview dismissal retains the tentative GIF without make intent or another selection event", async ({ page }) => {
   await setup(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   const tile = page.getByRole("button", { name: "Guest GIF 선택", exact: true });
   await tile.click();
   await expect(tile).toHaveAttribute("aria-pressed", "true");
@@ -411,7 +410,7 @@ test("live Umami receives the internal QA journey and corrected branches", async
     return route.fulfill({ status: 422, json: { error: "CONFIRMATION_REQUIRED", code: "FRAME_REDUCTION_REQUIRED", message, proposal: { frame_count: 40, max_frames: 20 } } });
   });
   await page.goto(`/?utm_source=internal_qa&utm_campaign=${run}`);
-  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("link", { name: "탐색", exact: true }).click();
   await page.getByRole("button", { name: "Guest GIF 선택", exact: true }).click();
   await page.getByRole("button", { name: "선택한 GIF 크게 보기", exact: true }).click();
   await page.getByRole("button", { name: "GIF 미리보기 닫기", exact: true }).click();

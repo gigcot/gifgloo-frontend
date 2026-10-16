@@ -151,9 +151,10 @@ export function HomeExperience({ browsing }: { browsing: boolean }) {
               <GifExplorer surface="home" selectedId={selectedGif?.id ?? null} onSelect={setSelectedGif} onSourceChange={setListSource} onBoundary={stage.onBoundary} footer={<Footer embedded />}
                 selectionBar={selectedGif && <ComposeBar selectedGif={selectedGif} onCompose={goCompose} onClear={clearSelection} />} />
             </div> : <div ref={examples} className={styles.examples} data-contained-scroll tabIndex={-1}>
-              <HeroOnboarding onStart={() => {
-                trackEvent("hero_cta_clicked", { action: "browse" });
-                stage.go(true);
+              <HeroOnboarding onStart={story => {
+                trackEvent("hero_cta_clicked", { action: "compose", example: story.id });
+                trackEvent("make_intent", { source: "onboarding_example", example: story.id });
+                router.push(`/compose?example=${encodeURIComponent(story.id)}`);
               }} />
             </div>}
           </div>
