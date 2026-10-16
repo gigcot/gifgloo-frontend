@@ -117,7 +117,7 @@ async function openCompletedComposition(
   await page.goto("/compose");
   await expect(page.getByAltText("selected gif")).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
 
   return state;
@@ -180,11 +180,11 @@ test("shows the non-blocking survey reminder once when starting another composit
   const feedbackDialog = page.getByRole("dialog");
   await expect(feedbackDialog).toHaveCount(0);
   await expect(page.getByAltText("my photo")).toBeVisible();
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeEnabled();
 
   const reminder = page.getByRole("status").filter({ hasText: "설문에 참여하면 사용횟수 1회를 드려요." });
   await expect(reminder.getByText("설문에 참여하면 사용횟수 1회를 드려요.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeVisible();
   await reminder.getByRole("button", { name: "설문 참여하기" }).click();
   await expect(page.getByRole("dialog").getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
   expect(state.surveyStatusRequests).toBeGreaterThan(1);

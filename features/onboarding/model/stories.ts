@@ -51,13 +51,13 @@ export const onboardingStories: OnboardingStory[] = [
     source: `${examplePath}/face-online-source.gif`, sourceAlt: "고른 원본: GETTING ONLINE",
     target: `${examplePath}/face-online-v2-target.png`, result: `${examplePath}/face-online-v2-result.mp4`, poster: `${examplePath}/face-online-v2-poster.webp`, resultAlt: "내 얼굴이 들어간 GETTING ONLINE 합성짤",
     description: "GETTING ONLINE 장면에 내 사진을 넣었어요. ‘접속할게’라는 말 대신 보내는 짤이에요.",
-    chatTitle: "게임할 친구에게", prompt: "겜 들어와",
-    replies: [{ text: "ㅇㅋ 간다", outgoing: true }, { text: "아니 왜 니 얼굴인데ㅋㅋㅋㅋ", outgoing: false }],
+    chatTitle: "게임할 친구에게", prompt: "오늘 게임 ㄱ?",
+    replies: [{ text: "접속한다.", outgoing: true }, { text: "아니 왜 니 얼굴인데ㅋㅋㅋㅋ", outgoing: false }],
     phases: [
-      { name: "chat", title: ["“겜 들어와”", "내가 들어간 짤", "로 답장."], caption: "접속한다는 말도, 나답게.", label: "", showPhoto: false, duration: 4800 },
+      { name: "chat", title: ["“오늘 게임 ㄱ?”", "내가 들어간 짤", "로 답장."], caption: "접속한다는 말도, 나답게.", label: "", showPhoto: false, duration: 4800 },
       { name: "source", title: ["이 접속 장면에,", "내 사진", "을 넣으면."], caption: "GETTING ONLINE 원본에 내 사진 한 장.", label: "원본", duration: 4800 },
       { name: "result", title: ["이제 내 얼굴로,", "접속한다."], caption: "같은 장면에 내 얼굴이 들어갔어요.", label: "합성한 짤", duration: 4800 },
-      { name: "chat", title: ["“겜 들어와”", "내가 들어간 짤", "로 답장."], caption: "내 사진으로 만든 짤을, 친구에게 툭.", label: "", duration: 4500 },
+      { name: "chat", title: ["“오늘 게임 ㄱ?”", "내가 들어간 짤", "로 답장."], caption: "내 사진으로 만든 짤을, 친구에게 툭.", label: "", duration: 4500 },
     ],
   },
   {

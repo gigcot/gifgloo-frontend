@@ -63,7 +63,7 @@ async function setup(page: Page, permission: "granted" | "denied" = "granted", r
 
 async function compose(page: Page) {
   await page.goto("/");
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   await page.getByRole("button", { name: "물 맞는 하마 선택", exact: true }).click();
   await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose$/);
@@ -76,7 +76,7 @@ async function compose(page: Page) {
 test("category topics retain provider order while the selection bar changes and clears the tentative GIF", async ({ page }) => {
   await setup(page);
   await page.goto("/");
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   await page.getByRole("navigation", { name: "GIF 분류" }).getByRole("button", { name: "동작", exact: true }).click();
   await page.getByRole("button", { name: "춤추기 GIF 둘러보기", exact: true }).click();
   const choices = page.getByTestId("gif-results").locator(".gif-choice");
@@ -116,7 +116,7 @@ for (const control of ["selection_bar", "preview"] as const) test(`mobile ${cont
   page.on("filechooser", () => { filePickerOpened = true; });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   const choice = page.getByRole("button", { name: "물 맞는 하마 선택", exact: true });
   await choice.click();
   const selection = page.getByRole("group", { name: "선택한 GIF", exact: true });
@@ -135,8 +135,8 @@ for (const control of ["selection_bar", "preview"] as const) test(`mobile ${cont
   await expect(page).toHaveURL(/\/compose$/);
   await expect(page.getByAltText("selected gif")).toBeVisible();
   await expect(page.getByAltText("my photo")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "사진 넣기", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toHaveCount(0);
   expect(filePickerOpened).toBe(false);
   await page.locator('input[type="file"]').setInputFiles("public/examples/hippo-pets/dog.jpg");
   await expect(page.getByAltText("my photo")).toBeVisible();
@@ -145,15 +145,15 @@ for (const control of ["selection_bar", "preview"] as const) test(`mobile ${cont
   await page.getByRole("button", { name: "사진 삭제", exact: true }).click();
   await expect(page.getByAltText("my photo")).toHaveCount(0);
   await expect(page.getByAltText("selected gif")).toBeVisible();
-  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "사진 넣기", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toHaveCount(0);
 });
 
 test("request acceptance gates safe departure and notification registration is explicit", async ({ page }) => {
   const state = await setup(page);
   await compose(page);
   state.accept = false;
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByText("접수가 끝날 때까지 이 화면을 유지해주세요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "완료되면 알림 받기" })).toHaveCount(0);
   state.accept = true;
@@ -173,7 +173,7 @@ test("request acceptance gates safe departure and notification registration is e
 for (const mode of ["denied", "server_failure"] as const) test(`notification ${mode} does not claim subscription or block completion`, async ({ page }) => {
   const state = await setup(page, mode === "denied" ? "denied" : "granted", mode === "server_failure");
   await compose(page);
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await page.getByRole("button", { name: "완료되면 알림 받기" }).click();
   await expect(page.getByText(mode === "denied" ? /알림이 차단되어/ : /알림 신청을 완료하지 못했어요/)).toBeVisible();
   await expect(page.getByRole("button", { name: "알림을 받을게요" })).toHaveCount(0);
@@ -199,7 +199,7 @@ for (const width of [320, 390, 768, 1440]) test(`capture actual first experience
   await expect(page.getByRole("button", { name: "어떻게 만드나요?", exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(captureDir, `home-${width}.png`) });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   await expect(page.getByText("넣고 싶은 대상을 떠올리며 둘러보세요.", { exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(captureDir, `browse-${width}.png`) });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -217,7 +217,7 @@ for (const width of [320, 390, 768, 1440]) test(`capture actual first experience
   await page.locator('input[type="file"]').setInputFiles("public/examples/hippo-pets/dog.jpg");
   await expect(page.getByAltText("my photo")).toBeVisible();
   await page.screenshot({ path: path.join(captureDir, `input-${width}.png`) });
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "GIF를 만들고 있어요" })).toBeVisible();
   await page.screenshot({ path: path.join(captureDir, `waiting-${width}.png`) });
   await page.evaluate(() => (window as unknown as { testState: { complete: () => void } }).testState.complete());
@@ -233,14 +233,14 @@ test("composition does not depend on a separate frame inspection", async ({ page
   await page.context().route("**/frame.gif", route => route.abort());
   await compose(page);
   await expect(page.locator("main")).not.toContainText("프레임");
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeEnabled();
 });
 
 test("unsupported notification is explained without permission prompt or subscription", async ({ page }) => {
   const state = await setup(page);
   await page.addInitScript(() => { Reflect.deleteProperty(window, "PushManager"); });
   await compose(page);
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByRole("button", { name: "알림 사용 불가" })).toBeDisabled();
   await expect(page.getByText(/이 기기·브라우저에서는 알림을 지원하지 않아요/)).toBeVisible();
   expect(state.subscriptions).toBe(0);
@@ -251,7 +251,7 @@ test("status disconnection is not reported as synthesis failure and can recover"
   await setup(page);
   await page.route("http://localhost:8000/compositions/job-v2", route => route.fulfill({ json: { status: "PROCESSING", stage: null } }));
   await compose(page);
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "GIF를 만들고 있어요" })).toBeVisible();
   await page.evaluate(() => (window as unknown as { testState: { disconnect: () => void } }).testState.disconnect());
   await expect(page.getByText(/진행 상태를 다시 연결하고 있어요/)).toBeVisible();
@@ -264,7 +264,7 @@ test("disabled server notification is visible before clicking and never requests
   const state = await setup(page);
   await page.route("http://localhost:8000/web-push/config", route => route.fulfill({ json: { enabled: false, public_key: null } }));
   await compose(page);
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByRole("button", { name: "알림 사용 불가" })).toBeDisabled();
   await expect(page.getByText(/완료 알림을 아직 사용할 수 없어요/)).toBeVisible();
   expect(state.subscriptions).toBe(0);

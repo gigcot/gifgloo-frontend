@@ -66,7 +66,8 @@ async function openFromHome(page: Page) {
   await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
   await expect(page).toHaveURL(/\/compose\?example=dog-typing$/);
   await expect(page.getByRole("group", { name: "선택한 원본 GIF", exact: true })).toBeVisible();
-  await expect(page.getByAltText("예시에 쓰인 사진")).toBeVisible();
+  await expect(page.getByRole("button", { name: "사진 넣기", exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "주인공 사진" }).locator("img")).toHaveCount(0);
   await expect(page.getByAltText("my photo")).toHaveCount(0);
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
   await expect(page.getByAltText("my photo")).toBeVisible();
@@ -81,9 +82,9 @@ test("anonymous home journey reaches result, download, link, retry and return wi
   const state = await setup(page);
   await openFromHome(page);
   await expect(page.getByRole("group", { name: "처음 이용할 때 한 번 확인해요", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeDisabled();
   for (const checkbox of await page.getByRole("checkbox").all()) await checkbox.check();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
   expect(state.consents).toBe(1);
   expect(state.sessionCalls).toBe(2);
@@ -97,7 +98,7 @@ test("anonymous home journey reaches result, download, link, retry and return wi
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "다시 만들기" }).click();
   await expect(page.getByAltText("my photo")).toBeVisible();
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeEnabled();
   await page.screenshot({ path: "test-results/anonymous-retry.png", fullPage: true });
 
   const events = await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")) as { name: string; data: Record<string, unknown> }[];
@@ -166,7 +167,7 @@ test("anonymous survey reward is available after completion and stays submitted 
   await openFromHome(page);
   await expect(page.getByRole("checkbox")).toHaveCount(4);
   for (const checkbox of await page.getByRole("checkbox").all()) await checkbox.check();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
   await page.getByRole("link", { name: "내 결과", exact: true }).click();
   await page.locator("header").getByRole("button", { name: "사용횟수 더 받기", exact: true }).click();
@@ -203,7 +204,7 @@ test("mobile anonymous input and account-link explanation remain usable", async 
 test("direct compose entry is not classified as a home funnel", async ({ page }) => {
   await setup(page);
   await page.goto("/compose");
-  await expect(page.getByRole("button", { name: "사진 고르기", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "사진 넣기", exact: true })).toBeVisible();
   await expect.poll(async () => (await recordedEvents(page, "compose_viewed"))[0]?.flow_origin).toBe("direct_compose");
   const events = await page.evaluate(() => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")) as { name: string; data: Record<string, unknown> }[];
   expect(events.some((event) => event.name === "home_viewed")).toBe(false);
@@ -215,7 +216,7 @@ for (const mode of ["blocked", "offline"] as const) {
     await openFromHome(page);
     await expect(page.locator("main").getByRole("alert")).toBeVisible();
     await expect(page.getByAltText("my photo")).toBeVisible();
-    await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeDisabled();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(state.sessionCalls).toBe(mode === "blocked" ? 2 : 0);
     expect(state.compositions).toBe(0);
@@ -226,7 +227,7 @@ for (const mode of ["blocked", "offline"] as const) {
 test("preview dismissal retains the tentative GIF without make intent or another selection event", async ({ page }) => {
   await setup(page);
   await page.goto("/");
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   const tile = page.getByRole("button", { name: "Guest GIF 선택", exact: true });
   await tile.click();
   await expect(tile).toHaveAttribute("aria-pressed", "true");
@@ -257,9 +258,9 @@ test("consent tracks aggregate readiness only and distinguishes saving from chec
   await page.getByRole("checkbox", { name: /개인정보처리방침/ }).check();
   await expect.poll(async () => (await recordedEvents(page, "compose_consent_state")).at(-1)).toMatchObject({ required: true, ready: true });
   await page.getByRole("checkbox", { name: /이용약관/ }).uncheck();
-  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeDisabled();
   await page.getByRole("checkbox", { name: "전체 동의", exact: true }).check();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
   const consentStates = await recordedEvents(page, "compose_consent_state");
   expect(consentStates.map(({ required, ready }) => ({ required, ready }))).toEqual([
@@ -281,7 +282,7 @@ test("already consented session is ready without a new consent save", async ({ p
   await openFromHome(page);
   await expect.poll(() => recordedEvents(page, "compose_consent_state")).toMatchObject([{ required: false, ready: true }]);
   await expect(page.getByRole("checkbox")).toHaveCount(0);
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
   expect(state.consents).toBe(0);
   expect(await recordedEvents(page, "compose_consent_save")).toHaveLength(0);
@@ -298,7 +299,7 @@ for (const failure of ["http", "network"] as const) test(`consent ${failure} fai
   });
   await openFromHome(page);
   await page.getByRole("checkbox", { name: "전체 동의", exact: true }).check();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.locator("main").getByRole("alert")).toBeVisible();
   await expect(page.getByAltText("my photo")).toBeVisible();
   const saves = await recordedEvents(page, "compose_consent_save");
@@ -309,7 +310,7 @@ for (const failure of ["http", "network"] as const) test(`consent ${failure} fai
   expect(await recordedEvents(page, "composition_failed")).toHaveLength(0);
   failSave = false;
   await page.getByRole("button", { name: "접속 다시 확인" }).click();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
   const retriedSaves = await recordedEvents(page, "compose_consent_save");
   expect(retriedSaves.map(event => event.status)).toEqual(["started", "error", "started", "success"]);
@@ -328,7 +329,7 @@ for (const action of ["cancel_button", "cancel_backdrop", "confirm"] as const) t
   });
   await openFromHome(page);
   await page.getByRole("checkbox", { name: "전체 동의", exact: true }).check();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByText(message, { exact: true })).toBeVisible();
   const steps = await recordedEvents(page, "composition_request_step");
   expect(steps.filter(event => event.phase === "submit").map(event => event.status)).toEqual(["started", "confirmation_required"]);
@@ -363,7 +364,7 @@ test("unrelated 422 remains an error rather than a frame confirmation", async ({
   await page.route("http://localhost:8000/compositions/from-upload", route => route.fulfill({ status: 422, json: { detail: "invalid input" } }));
   await openFromHome(page);
   await page.getByRole("checkbox", { name: "전체 동의", exact: true }).check();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "작업에 실패했습니다" })).toBeVisible();
   const steps = await recordedEvents(page, "composition_request_step");
   expect(steps.filter(event => event.phase === "submit").map(event => event.status)).toEqual(["started", "error"]);
@@ -410,7 +411,7 @@ test("live Umami receives the internal QA journey and corrected branches", async
     return route.fulfill({ status: 422, json: { error: "CONFIRMATION_REQUIRED", code: "FRAME_REDUCTION_REQUIRED", message, proposal: { frame_count: 40, max_frames: 20 } } });
   });
   await page.goto(`/?utm_source=internal_qa&utm_campaign=${run}`);
-  await page.getByRole("link", { name: "탐색", exact: true }).click();
+  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   await page.getByRole("button", { name: "Guest GIF 선택", exact: true }).click();
   await page.getByRole("button", { name: "선택한 GIF 크게 보기", exact: true }).click();
   await page.getByRole("button", { name: "GIF 미리보기 닫기", exact: true }).click();
@@ -419,12 +420,12 @@ test("live Umami receives the internal QA journey and corrected branches", async
   await expect(page.getByAltText("selected gif")).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
   await page.getByRole("checkbox", { name: "전체 동의", exact: true }).check();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect(page.locator("main").getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "접속 다시 확인" }).click();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await page.getByRole("button", { name: "취소", exact: true }).click();
-  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await page.getByRole("button", { name: "네, 진행할게요", exact: true }).click();
   await expect(page.getByAltText("합성 결과")).toBeVisible();
   await expect.poll(() => receipts.map(event => event.name), { timeout: 20_000 }).toContain("composition_result_viewed");
