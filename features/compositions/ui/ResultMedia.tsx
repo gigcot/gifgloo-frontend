@@ -76,11 +76,11 @@ function OwnedResultMedia({ src, assetId, jobId, source, onRestart, onRetry }: P
     })().catch((error: unknown) => {
       if (!controller.signal.aborted) {
         setLoadError(error instanceof Error ? error.message : "결과를 준비하지 못했어요. 다시 시도해주세요.");
-        trackEvent("result_export_load_failed", { asset_id: assetId, source });
+        trackEvent("result_export_load_failed", { job_id: jobId, asset_id: assetId, source });
       }
     });
     return () => { controller.abort(); if (decoded) releaseResult(decoded); };
-  }, [assetId, authFetch, source]);
+  }, [assetId, authFetch, jobId, source]);
 
   useEffect(() => {
     const media = mediaRef.current;
@@ -154,11 +154,11 @@ function OwnedResultMedia({ src, assetId, jobId, source, onRestart, onRetry }: P
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) {
         setConversion({ progress: 0, error: error instanceof Error ? error.message : "MP4 변환에 실패했어요. GIF로 저장해주세요." });
-        trackEvent("result_mp4_conversion_failed", { asset_id: assetId, source });
+        trackEvent("result_mp4_conversion_failed", { job_id: jobId, asset_id: assetId, source });
       }
     });
     return () => controller.abort();
-  }, [format, gif, mp4File, convertAttempt, assetId, source]);
+  }, [format, gif, mp4File, convertAttempt, assetId, jobId, source]);
 
   const reducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const playing = !(paused ?? reducedMotion);
@@ -183,15 +183,15 @@ function OwnedResultMedia({ src, assetId, jobId, source, onRestart, onRetry }: P
 
   function save() {
     if (frameMode && gif) {
-      trackEvent("result_export_download_attempted", { asset_id: assetId, source, format: "png", frame: frameIndex + 1 });
+      trackEvent("result_export_download_attempted", { job_id: jobId, asset_id: assetId, source, format: "png", frame: frameIndex + 1 });
       downloadResultFile(new File([gif.frames[frameIndex].png], `gifgloo-frame-${String(frameIndex + 1).padStart(2, "0")}.png`, { type: "image/png" }));
     } else if (format === "GIF") {
       if (gifFile) {
-        trackEvent("result_downloaded", { asset_id: assetId, source });
+        trackEvent("result_downloaded", { job_id: jobId, asset_id: assetId, source });
         downloadResultFile(gifFile);
-      } else downloadGif(downloadUrl, source, assetId);
+      } else downloadGif(downloadUrl, source, assetId, jobId);
     } else if (mp4File) {
-      trackEvent("result_export_download_attempted", { asset_id: assetId, source, format: "mp4" });
+      trackEvent("result_export_download_attempted", { job_id: jobId, asset_id: assetId, source, format: "mp4" });
       downloadResultFile(mp4File);
     }
     setNotice(`${outputFormat} 다운로드를 시작했어요.`);
@@ -205,7 +205,7 @@ function OwnedResultMedia({ src, assetId, jobId, source, onRestart, onRetry }: P
     setCopying(true);
     try {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": gif.frames[frameIndex].png })]);
-      trackEvent("result_image_copied", { asset_id: assetId, source, frame: frameIndex + 1 });
+      trackEvent("result_image_copied", { job_id: jobId, asset_id: assetId, source, frame: frameIndex + 1 });
       setNotice("이미지를 복사했어요. 원하는 대화에 붙여넣어보세요.");
     } catch {
       setNotice("이미지를 복사하지 못했어요. 복사 권한을 확인하거나 이미지로 저장해주세요.");
@@ -218,14 +218,14 @@ function OwnedResultMedia({ src, assetId, jobId, source, onRestart, onRetry }: P
       setNotice("이 브라우저에서는 파일 공유를 지원하지 않아요. 저장한 파일을 원하는 앱에서 첨부해주세요."); return;
     }
     setSharing(true);
-    trackEvent("result_file_share_attempted", { asset_id: assetId, source, format: format.toLowerCase() });
+    trackEvent("result_file_share_attempted", { job_id: jobId, asset_id: assetId, source, format: format.toLowerCase() });
     try {
       await navigator.share({ files: [animatedFile] });
-      trackEvent("result_file_share_resolved", { asset_id: assetId, source, format: format.toLowerCase() });
+      trackEvent("result_file_share_resolved", { job_id: jobId, asset_id: assetId, source, format: format.toLowerCase() });
     } catch (error) {
       if (!(error instanceof Error && error.name === "AbortError")) {
         setNotice("공유 창을 열지 못했어요. 파일로 저장한 뒤 첨부해주세요.");
-        trackEvent("result_file_share_failed", { asset_id: assetId, source, format: format.toLowerCase() });
+        trackEvent("result_file_share_failed", { job_id: jobId, asset_id: assetId, source, format: format.toLowerCase() });
       }
     } finally { setSharing(false); }
   }
@@ -249,7 +249,7 @@ function OwnedResultMedia({ src, assetId, jobId, source, onRestart, onRetry }: P
         <IconButton label={`${outputFormat} 저장`} className={styles.outlined} disabled={frameMode ? !gif : format === "MP4" && !mp4File} onClick={save}>{!frameMode && converting ? <LoaderCircle className={styles.spinning} /> : <Download />}</IconButton>
         {!frameMode && <IconButton label={`${format} 파일 공유`} className={styles.primary} onClick={() => void shareFile()} disabled={!animatedFile || sharing}>{sharing ? <LoaderCircle className={styles.spinning} /> : <Share />}</IconButton>}
         <IconButton label={frameMode ? "움직이는 결과로 돌아가기" : "한 장 골라 쓰기"} className={frameMode ? styles.selected : ""} aria-expanded={frameMode} aria-controls={framesId} onClick={() => { setMenuOpen(false); setFrameMode(!frameMode); setPaused(!frameMode); }} disabled={!gif}><Film /></IconButton>
-        <ShareButton assetId={assetId} analyticsSource={source} className={styles.icon} iconOnly onMessage={setNotice} />
+        <ShareButton assetId={assetId} jobId={jobId} analyticsSource={source} className={styles.icon} iconOnly onMessage={setNotice} />
       </div>
     </div>
     {!gif && !loadError && <p className={styles.operation} role="status">결과 파일을 준비하고 있어요…</p>}

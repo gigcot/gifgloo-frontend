@@ -19,6 +19,7 @@ import { CompletionNotificationButton } from "./CompletionNotificationButton";
 import { PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
 import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { rememberJobOrigin } from "@/shared/lib/job-origin";
 import { beginCompositionAttempt, journeyContext } from "@/shared/lib/journey";
 import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from "@/features/auth/model/signup-consent";
 import { isSupportedImageFile } from "@/features/compose/model/prepare-image-upload";
@@ -282,12 +283,15 @@ export function ComposePanel() {
     if (composingRef.current) return;
     composingRef.current = true;
 
+    const originContext = journeyContext();
+    let acceptedOwnerId: string;
     setStage("processing");
     setError(null);
     setConfirmation(null);
 
     try {
-      await ensureSession();
+      const session = await ensureSession();
+      acceptedOwnerId = session.userId!;
       if (consentRequired) {
         trackEvent("compose_consent_save", { status: "started" });
         let response: Response;
@@ -314,6 +318,7 @@ export function ComposePanel() {
     const result = await submitComposition(authFetch, gif, photoFile, confirmed);
 
     if (result.type === "job") {
+      rememberJobOrigin(result.jobId, acceptedOwnerId, originContext);
       requestCreditBalanceRefresh();
       trackEvent("composition_requested", { job_id: result.jobId, ...inputProperties });
       if (retrySourceRef.current) {

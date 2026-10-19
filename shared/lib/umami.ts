@@ -1,5 +1,6 @@
 import { getCampaignAttribution } from "./campaign-attribution";
 import { journeyContext } from "./journey";
+import { jobOriginContext } from "./job-origin";
 
 type UmamiEventData = Record<string, string | number | boolean>;
 type PendingEvent = { eventName: string; eventData?: UmamiEventData };
@@ -48,7 +49,13 @@ export function identifyUser(userId: string): void {
 }
 
 export function trackEvent(eventName: string, eventData?: UmamiEventData): void {
-  eventData = { ...journeyContext(), ...eventData, ...getCampaignAttribution() };
+  const resultEvent = eventName.startsWith("result_") || eventName.startsWith("shared_result_");
+  const jobId = typeof eventData?.job_id === "string" ? eventData.job_id : undefined;
+  eventData = {
+    ...journeyContext(), ...eventData,
+    ...(jobId || resultEvent ? jobOriginContext(jobId) : {}),
+    ...getCampaignAttribution(), analytics_schema_version: "2",
+  };
   if (window.umami) {
     window.umami.track(eventName, eventData);
     return;

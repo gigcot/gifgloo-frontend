@@ -4,6 +4,7 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { API_BASE } from "./api-base";
 import { getCampaignAttribution } from "./campaign-attribution";
 import { trackEvent } from "./umami";
+import { setJobOriginOwner } from "./job-origin";
 
 type AuthState = {
   status: "checking" | "visitor" | "anonymous" | "member" | "error";
@@ -26,6 +27,7 @@ const VISITOR: AuthState = { ...INITIAL_AUTH_STATE, status: "visitor" };
 const authListeners = new Set<() => void>();
 
 function setAuthState(next: AuthState): void {
+  setJobOriginOwner(next.userId);
   authState = next;
   for (const listener of authListeners) listener();
 }

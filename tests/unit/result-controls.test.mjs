@@ -32,7 +32,7 @@ const flatten = (element, output = []) => {
   return output;
 };
 function createHarness(seed = {}) {
-  const states = [], refs = [], transitions = [];
+  const states = [], refs = [], transitions = [], events = [];
   let stateCursor = 0, refCursor = 0, effects = [], now = 0, raf = null, encodingCalls = 0;
   const authFetch = () => { throw new Error('Unexpected network call: review harness must stay offline'); };
   const react = {
@@ -54,6 +54,8 @@ function createHarness(seed = {}) {
   const moduleCache = new Map();
   const globals = {
     AbortController, Error, Blob, File, TextDecoder, Uint8ClampedArray,
+    navigator: { clipboard: { write: async () => {} }, share: async () => {}, canShare: () => true },
+    ClipboardItem: class { constructor(data) { this.data = data; } },
     window: { matchMedia: () => ({ matches: false }) },
     performance: { now: () => now },
     requestAnimationFrame: callback => { raf = callback; return 1; },
@@ -76,7 +78,7 @@ function createHarness(seed = {}) {
     if (name.endsWith('.css')) return new Proxy({}, { get: (_, name) => String(name) });
     if (name === '@/shared/lib/use-auth') return { useAuth: () => ({ authFetch, userId: 'review-user' }) };
     if (name === '@/shared/lib/api-base') return { API_BASE: 'https://offline.invalid' };
-    if (name === '@/shared/lib/umami') return { trackEvent() {}, trackEventOnce() {} };
+    if (name === '@/shared/lib/umami') return { trackEvent: (name, data) => events.push({ name, data }), trackEventOnce: (_, name, data) => events.push({ name, data }) };
     if (name === '@/shared/lib/journey') return { recordFirstResult() {} };
     if (name === '@/shared/lib/download') return { downloadGif() {} };
     if (name === '@/shared/ui/ShareButton') return { ShareButton: 'ShareButton' };
@@ -85,7 +87,7 @@ function createHarness(seed = {}) {
       const filename = ['.ts', '.tsx', '.js', ''].map(extension => base + extension).find(file => fs.existsSync(file) && fs.statSync(file).isFile());
       assert(filename, `Cannot resolve ${name} from ${from}`);
       const actual = loadModule(filename);
-      if (name.endsWith('/result-media')) return { ...actual, encodeResultMp4: async () => { encodingCalls++; throw new Error('simulated encoder failure'); } };
+      if (name.endsWith('/result-media')) return { ...actual, downloadResultFile() {}, encodeResultMp4: async () => { encodingCalls++; throw new Error('simulated encoder failure'); } };
       return actual;
     }
     return projectRequire(name);
@@ -96,6 +98,7 @@ function createHarness(seed = {}) {
     effectContaining(text) { const effect = effects.find(effect => effect.fn.toString().includes(text)); assert(effect, `Effect containing ${text} was not found; adapt harness after structural refactor`); return effect; },
     tick(timestamp) { now = timestamp; assert(raf, 'No animation callback scheduled'); raf(timestamp); },
     state(name) { const index = stateNames.indexOf(name); assert(index >= 0, `Unknown state ${name}`); return states[index]; },
+    get events() { return events; },
     get transitions() { return transitions; },
     get encodingCalls() { return encodingCalls; },
   };
@@ -152,4 +155,30 @@ test('preview returns to the timeline after a long background pause', () => {
   harness.tick(cycle * 100000 + 350);
   cleanup();
   assert.equal(harness.state('frameIndex'), 2);
+});
+
+
+test('GIF, PNG, MP4, image copy and file share carry the displayed job and asset', async () => {
+  const file = new File(['fixture'], 'result.gif', { type: 'image/gif' });
+  for (const [seed, label, expected] of [
+    [{ gif: fakeGif, gifFile: file }, 'GIF 저장', 'result_downloaded'],
+    [{ gif: fakeGif, frameMode: true }, 'PNG 저장', 'result_export_download_attempted'],
+    [{ gif: fakeGif, format: 'MP4', mp4File: file }, 'MP4 저장', 'result_export_download_attempted'],
+    [{ gif: fakeGif, frameMode: true }, '선택한 이미지 복사', 'result_image_copied'],
+    [{ gif: fakeGif, gifFile: file }, 'GIF 파일 공유', 'result_file_share_resolved'],
+  ]) {
+    const harness = createHarness(seed);
+    const button = flatten(harness.render()).find(element => element.props?.label === label);
+    assert(button, `${label} control missing`);
+    button.props.onClick();
+    await new Promise(setImmediate);
+    assert(harness.events.some(event => event.name === expected));
+    for (const event of harness.events) {
+      assert.equal(event.data.job_id, 'review-job');
+      assert.equal(event.data.asset_id, 'review-asset');
+    }
+  }
+  const harness = createHarness({ gif: fakeGif });
+  const share = flatten(harness.render()).find(element => element.type === 'ShareButton');
+  assert.equal(share.props.jobId, 'review-job');
 });
