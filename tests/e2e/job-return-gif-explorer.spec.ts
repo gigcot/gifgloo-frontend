@@ -6,7 +6,7 @@ const gif = (id: string) => ({ id, slug: id, title: id, blur_preview: "", file: 
 } });
 
 async function setup(page: Page) {
-  const state = { submissions: 0, sessions: 0, user: true, status: "PENDING", access: 200,
+  const state = { submissions: 0, nextJobId: "return-job", sessions: 0, user: true, ownerId: "owner", status: "PENDING", access: 200,
     gifRequests: [] as string[], submittedGifUrls: [] as string[], failMore: false, delayMore: false, listRequests: 0, listFails: false };
   await page.addInitScript(() => {
     window.umami = { identify() {}, track(name, data) {
@@ -23,19 +23,19 @@ async function setup(page: Page) {
       source_gif_url: "/icon.png", target_asset_id: null,
       result_url: state.status === "COMPLETED" ? "/icon.png" : null, result_asset_id: "result",
       created_at: "2026-10-09T00:00:00Z", credit_settlement: { balance_before: 20, charged: 10, refunded: 10, balance_after: 20 } };
-    if (path === "/users/me") return route.fulfill(state.user ? { json: { user_id: "owner", user_kind: "anonymous", consent_required: false } } : { status: 401, json: {} });
+    if (path === "/users/me") return route.fulfill(state.user ? { json: { user_id: state.ownerId, user_kind: "anonymous", consent_required: false } } : { status: 401, json: {} });
     if (path === "/users/anonymous-session") { state.sessions++; return route.fulfill({ status: 500, json: {} }); }
     if (path === "/credits/balance") return route.fulfill({ json: { balance: 20 - state.submissions * 10, remaining_uses: 2 - state.submissions, nearest_expires_at: null } });
     if (path === "/experiments/exp-001/survey") return route.fulfill({ json: { eligible: false, submitted: false } });
     if (path === "/web-push/config") return route.fulfill({ json: { enabled: false, public_key: null } });
     if (path === "/compositions/uploads") return route.fulfill({ json: { upload_id: "upload", upload_url: "http://localhost:8000/upload", headers: { "Content-Type": "image/png" } } });
     if (path === "/upload") return route.fulfill({ status: 200 });
-    if (path === "/compositions/from-upload") { state.submittedGifUrls.push(route.request().postDataJSON().gif_url); state.submissions++; return route.fulfill({ json: { composition_job_id: "return-job" } }); }
-    if (path === "/compositions/return-job/status") return route.fulfill(state.access === 200
+    if (path === "/compositions/from-upload") { state.submittedGifUrls.push(route.request().postDataJSON().gif_url); state.submissions++; return route.fulfill({ json: { composition_job_id: state.nextJobId } }); }
+    if (/^\/compositions\/return-job(?:-B)?\/status$/.test(path)) return route.fulfill(state.access === 200
       ? { contentType: "text/event-stream", body: `data: ${JSON.stringify(job)}\n\n` }
       : { status: state.access, json: {} });
-    if (path === "/compositions/return-job") return route.fulfill({ status: state.access, json: job });
-    if (path === "/compositions/return-job/feedback") return route.fulfill({ json: { satisfied: null } });
+    if (/^\/compositions\/return-job(?:-B)?$/.test(path)) return route.fulfill({ status: state.access, json: job });
+    if (/^\/compositions\/return-job(?:-B)?\/feedback$/.test(path)) return route.fulfill({ json: { satisfied: null } });
     if (path === "/compositions") { state.listRequests++; return route.fulfill(state.listFails ? { status: 503, json: {} } : { json: { jobs: [job] } }); }
     return route.fulfill({ status: 500, json: { error: "Unexpected mocked endpoint" } });
   });
@@ -59,7 +59,7 @@ async function setup(page: Page) {
   return state;
 }
 
-async function submit(page: Page) {
+async function submit(page: Page, expectedJobId = "return-job") {
   await page.goto("/");
   await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
   await page.getByRole("button", { name: "trending-1-0 선택", exact: true }).click();
@@ -70,7 +70,7 @@ async function submit(page: Page) {
   await page.locator('input[type="file"]').setInputFiles("public/icon.png");
   await expect(page.getByAltText("my photo")).toBeVisible();
   await page.getByRole("button", { name: "합성하기", exact: true }).click();
-  await expect(page).toHaveURL(/\/compose\?job=return-job$/);
+  await expect(page).toHaveURL(new RegExp(`/compose\\?job=${expectedJobId}$`));
 }
 
 test("accepted job survives My Results, browser back, reload and direct return without resubmission", async ({ page }) => {
@@ -333,4 +333,64 @@ test("a failed first search retries the same query instead of discarding the bro
   await page.getByRole("button", { name: "다시 불러오기", exact: true }).click();
   await expect(page.getByRole("button", { name: "my unusual scene-1-0 선택", exact: true })).toBeVisible();
   expect(attempts).toBe(2);
+});
+
+
+test("accepted origin survives later attempts, reload, My Results and notification return; lost scope stays unknown", async ({ page, context }) => {
+  const state = await setup(page);
+  await page.route("http://localhost:8000/assets/result/download", route => route.fulfill({
+    contentType: "image/gif", headers: { "Content-Disposition": "attachment; filename=result.gif" },
+    body: Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64"),
+  }));
+  await submit(page);
+  const events = () => page.evaluate(() => JSON.parse(sessionStorage.getItem("explorer_events") ?? "[]") as { name: string; data: Record<string, string> }[]);
+  const accepted = (await events()).find(event => event.name === "composition_requested")!.data;
+  expect(accepted.origin_linkage).toBe("known");
+  expect(accepted.origin_attempt_id).toBe(accepted.attempt_id);
+  expect(accepted.analytics_schema_version).toBe("2");
+  state.status = "COMPLETED";
+  await page.reload();
+  await page.getByRole("button", { name: "다시 만들기", exact: true }).click();
+  await expect(page).toHaveURL(/\/compose$/);
+  state.nextJobId = "return-job-B";
+  await submit(page, "return-job-B");
+  const acceptedB = (await events()).find(event => event.name === "composition_requested" && event.data.job_id === "return-job-B")!.data;
+  expect(acceptedB.attempt_id).not.toBe(accepted.attempt_id);
+  expect(acceptedB.origin_attempt_id).toBe(acceptedB.attempt_id);
+  expect(state.submissions).toBe(2);
+  await page.goto("/compose?job=return-job");
+  await page.getByRole("button", { name: "만족해요", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "평가해 주셔서 감사해요" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "GIF 저장", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "GIF 저장", exact: true }).click();
+  await page.goto("/my-assets");
+  await page.getByRole("button", { name: "완성된 GIF 보기" }).click();
+  await page.getByRole("button", { name: "GIF 저장", exact: true }).click();
+  await page.getByRole("button", { name: "링크 복사", exact: true }).click();
+  await page.goto("/my-assets?job=return-job&from=notification");
+  await expect(page.getByRole("region", { name: "알림으로 돌아온 결과" })).toBeVisible();
+  await page.getByRole("button", { name: "GIF 저장", exact: true }).click();
+  const jobEvents = (await events()).filter(event => event.data.job_id === "return-job");
+  expect(jobEvents.some(event => event.name === "completion_notification_opened")).toBe(true);
+  expect(jobEvents.some(event => event.name === "composition_feedback_submitted")).toBe(true);
+  expect(jobEvents.filter(event => event.name === "result_downloaded").map(event => event.data.source)).toEqual(["composition_result", "my_assets", "notification_return"]);
+  for (const event of jobEvents) {
+    expect(event.data.origin_flow_id).toBe(accepted.flow_id);
+    expect(event.data.origin_attempt_id).toBe(accepted.attempt_id);
+  }
+  const download = jobEvents.find(event => event.name === "result_downloaded")!;
+  expect(download.data.attempt_id).toBe(acceptedB.attempt_id);
+  expect(jobEvents.find(event => event.name === "result_share_attempted")!.data.origin_linkage).toBe("known");
+  await page.evaluate(() => sessionStorage.removeItem("gifgloo_job_origins"));
+  await page.reload();
+  await page.getByRole("button", { name: "GIF 저장", exact: true }).click();
+  expect((await events()).filter(event => event.name === "result_downloaded").at(-1)!.data).toMatchObject({ origin_linkage: "unknown", job_id: "return-job" });
+  expect((await events()).filter(event => event.name === "result_downloaded").at(-1)!.data).not.toHaveProperty("origin_attempt_id");
+  const other = await context.newPage();
+  await setup(other);
+  await other.goto("/compose?job=return-job");
+  await expect.poll(() => other.evaluate(() => JSON.parse(sessionStorage.getItem("explorer_events") ?? "[]").some((event: { name: string }) => event.name === "composition_job_status_viewed"))).toBe(true);
+  const unknown = await other.evaluate(() => JSON.parse(sessionStorage.getItem("explorer_events")!)).then(events => events.find((event: { name: string }) => event.name === "composition_job_status_viewed").data);
+  expect(unknown.origin_linkage).toBe("unknown");
+  expect(unknown).not.toHaveProperty("origin_attempt_id");
 });
