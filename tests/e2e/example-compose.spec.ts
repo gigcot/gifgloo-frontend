@@ -1,8 +1,19 @@
 import { test, expect, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 async function setup(page: Page, userKind: "anonymous" | "member" = "anonymous") {
   const state = { uploads: 0, submissions: [] as { gif_url: string; upload_id: string }[], queries: [] as string[] };
   await page.route("https://cloud.umami.is/**", route => route.abort());
+  await page.addInitScript(() => {
+    Object.assign(window, { umami: {
+      identify: () => undefined,
+      track: (name: string, data: Record<string, unknown>) => {
+        const events = JSON.parse(sessionStorage.getItem("test_events") ?? "[]");
+        events.push({ name, data });
+        sessionStorage.setItem("test_events", JSON.stringify(events));
+      },
+    } });
+  });
   await page.route("https://static.klipy.com/**", route => route.fulfill({ path: "public/icon.png", contentType: "image/png" }));
   await page.route("http://localhost:8000/**", async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
@@ -28,6 +39,11 @@ async function setup(page: Page, userKind: "anonymous" | "member" = "anonymous")
   return state;
 }
 
+async function lastEvent(page: Page, name: string) {
+  return page.evaluate(eventName => JSON.parse(sessionStorage.getItem("test_events") ?? "[]")
+    .filter((event: { name: string }) => event.name === eventName).at(-1)?.data, name);
+}
+
 for (const [example, advances, scene, target] of [
   ["dog-typing", 0, "cat-typing", "dog-typing-target.png"],
   ["face-online", 3, "face-online", "face-online-v2-target.png"],
@@ -43,6 +59,7 @@ for (const [example, advances, scene, target] of [
   await expect(page).toHaveURL(new RegExp("/compose\\?example=" + example + "$"));
   await expect(page.getByRole("group", { name: "선택한 원본 GIF" }).locator("video")).toHaveAttribute("src", "/examples/scenes/" + scene + ".mp4");
   await expect(page.getByRole("group", { name: "주인공 사진" }).locator("img")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "예시 조합 안내" })).toHaveCount(0);
   await expect(page.locator("details video")).toHaveCount(0);
   await page.getByText("완성 예시 보기", { exact: true }).click();
   await expect(page.getByAltText("예시에 쓰인 사진")).toHaveAttribute("src", "/examples/onboarding/" + target);
@@ -70,6 +87,12 @@ for (const [width, userKind] of [[320, "anonymous"], [393, "anonymous"], [1280, 
   await expect(page.getByAltText("my photo")).toBeVisible();
   const photo = await page.getByAltText("my photo").getAttribute("src");
   expect(state.uploads).toBe(0);
+  const notice = page.getByRole("region", { name: "예시 조합 안내" });
+  await expect(notice).toContainText("이용권 1회를 사용해요");
+  await expect(notice).not.toContainText("무료");
+  await notice.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  await page.screenshot({ path: `qa/example-compose/notice-${width}-${userKind}.png`, fullPage: true });
   await page.locator("header").getByRole("button", { name: "장면 찾기", exact: true }).click();
   await expect(page).toHaveURL(/\/compose\?example=face-online$/);
   const sheet = page.getByRole("dialog", { name: "어떤 모습을 만들어볼까요?", exact: true });
@@ -86,10 +109,15 @@ for (const [width, userKind] of [[320, "anonymous"], [393, "anonymous"], [1280, 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByAltText("my photo")).toHaveAttribute("src", photo!);
   await expect(page.getByAltText("selected gif")).toHaveAttribute("src", "/icon.png");
+  await expect(notice).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect.poll(() => state.submissions, { timeout: 15_000 }).toEqual([{ gif_url: "/icon.png", upload_id: "example-upload", acknowledge_frame_reduction: false }]);
   await expect(page.getByRole("heading", { name: "완성됐어요!" })).toBeVisible();
+  await expect.poll(() => lastEvent(page, "composition_requested")).toMatchObject({
+    example: "face-online", photo_source: "example", photo_example: "face-online",
+    scene_matches_example: false, is_example_pair: false,
+  });
 });
 
 test("the approved example submits its public source GIF only after an explicit make action", async ({ page }) => {
@@ -106,6 +134,73 @@ test("the approved example submits its public source GIF only after an explicit 
   await page.getByRole("button", { name: "합성하기", exact: true }).click();
   await expect.poll(() => state.submissions, { timeout: 15_000 }).toEqual([{ gif_url: sourceUrl, upload_id: "example-upload", acknowledge_frame_reduction: false }]);
   await expect(page.getByRole("heading", { name: "완성됐어요!" })).toBeVisible();
+  const ready = await lastEvent(page, "compose_inputs_ready");
+  for (const name of ["compose_inputs_ready", "compose_clicked", "composition_requested"]) {
+    await expect.poll(() => lastEvent(page, name)).toMatchObject({
+      example: "face-online", photo_source: "example", photo_example: "face-online",
+      scene_matches_example: true, is_example_pair: true, flow_id: ready.flow_id,
+    });
+  }
+  expect((await lastEvent(page, "composition_requested")).attempt_id).toBe((await lastEvent(page, "compose_clicked")).attempt_id);
+});
+
+test("example pair notice follows material changes without guessing uploaded files", async ({ page }) => {
+  const state = await setup(page);
+  await page.goto("/compose?example=face-online");
+  const notice = page.getByRole("region", { name: "예시 조합 안내" });
+  const input = page.getByLabel("합성할 사진", { exact: true });
+  await expect(notice).toHaveCount(0);
+  await page.getByRole("button", { name: "예시 사진 써보기", exact: true }).click();
+  await expect(notice).toBeVisible();
+
+  const chooser = page.waitForEvent("filechooser");
+  await notice.getByRole("button", { name: "사진 바꾸기", exact: true }).click();
+  await chooser;
+  await input.dispatchEvent("cancel");
+  await expect(notice).toBeVisible();
+  await input.setInputFiles({ name: "invalid.txt", mimeType: "text/plain", buffer: Buffer.from("invalid") });
+  await expect(page.locator("main").getByRole("alert")).toContainText("이미지 파일만");
+  await expect(notice).toBeVisible();
+  await expect.poll(() => lastEvent(page, "photo_change_clicked")).toMatchObject({ control: "example_pair_notice" });
+
+  await notice.getByRole("button", { name: "장면 바꾸기", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "어떤 모습을 만들어볼까요?", exact: true });
+  await sheet.getByRole("button", { name: "건배", exact: true }).click();
+  await sheet.getByRole("button", { name: "너를 위해 건배", exact: false }).click();
+  await expect(notice).toHaveCount(0);
+  await expect.poll(() => lastEvent(page, "scene_picker_opened")).toMatchObject({ control: "example_pair_notice" });
+  await expect.poll(() => lastEvent(page, "compose_inputs_ready")).toMatchObject({ photo_source: "example", scene_matches_example: false, is_example_pair: false });
+  await page.getByRole("button", { name: "장면 바꾸기", exact: true }).click();
+  await page.getByRole("button", { name: "다른 장면 둘러보기", exact: false }).click();
+  await sheet.getByRole("button", { name: "접속", exact: true }).click();
+  await sheet.getByRole("button", { name: "나 접속했다", exact: false }).click();
+  await expect(notice).toBeVisible();
+
+  await input.setInputFiles({ name: "face-online-example.png", mimeType: "image/png", buffer: await readFile("public/examples/onboarding/face-online-v2-target.png") });
+  await expect(notice).toHaveCount(0);
+  await expect.poll(() => lastEvent(page, "compose_inputs_ready")).toMatchObject({ photo_source: "upload", photo_example: "none", scene_matches_example: true, is_example_pair: false });
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "완성됐어요!" })).toBeVisible();
+  await expect.poll(() => lastEvent(page, "composition_requested")).toMatchObject({ photo_source: "upload", is_example_pair: false });
+  expect(state.submissions).toHaveLength(1);
+  expect(JSON.stringify(await lastEvent(page, "composition_requested"))).not.toContain("face-online-example.png");
+});
+
+for (const outcome of ["completed", "failed"] as const) test(`example photo provenance survives ${outcome} and a retry without the example URL`, async ({ page }) => {
+  const state = await setup(page);
+  if (outcome === "failed") await page.route("**/compositions/example-job/status", route => route.fulfill({
+    contentType: "text/event-stream", body: 'data: {"status":"FAILED","reason":"합성 실패"}\n\n',
+  }));
+  await page.goto("/compose?example=face-online");
+  await page.getByRole("button", { name: "예시 사진 써보기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect(page).toHaveURL(/\/compose\?job=example-job$/);
+  await page.getByRole("button", { name: outcome === "completed" ? "다시 만들기" : "다시 시도", exact: true }).click();
+  await expect(page).toHaveURL(/\/compose$/);
+  await expect(page.getByRole("region", { name: "예시 조합 안내" })).toBeVisible();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect.poll(() => state.submissions.length).toBe(2);
+  await expect.poll(() => lastEvent(page, "composition_requested")).toMatchObject({ example: "face-online", photo_source: "example", is_example_pair: true });
 });
 
 test("closing scene selection and a failed sample photo leave inputs usable", async ({ page }) => {
