@@ -256,12 +256,54 @@
   cursor: not-allowed;
 }
 
-.submit p {
+.submit > p {
   margin-top: 10px;
   font-size: 14px;
   line-height: 1.5;
   text-align: center;
   color: #bcbcc6;
+}
+
+.exampleNotice {
+  margin-bottom: 16px;
+  padding: 14px 16px 6px;
+  border: 1px solid #c4b5fd38;
+  border-radius: 14px;
+  background: #a78bfa0a;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+.exampleNotice h2 {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.exampleNotice p {
+  margin-top: 6px;
+  color: #c4c4cc;
+}
+
+.exampleActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin-top: 4px;
+}
+
+.exampleActions button {
+  min-height: 44px;
+  color: var(--lavender);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.exampleActions button:focus-visible {
+  outline: 2px solid var(--lavender);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 .sessionNotice,

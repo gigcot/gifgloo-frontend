@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Gif } from "@/entities/gif/model";
@@ -47,7 +47,8 @@ export function ComposePanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get("job");
-  const example = onboardingStories.find(story => story.id === searchParams.get("example"));
+  const requestedExample = onboardingStories.find(story => story.id === searchParams.get("example"));
+  const [example, setExample] = useState(requestedExample);
   const { authFetch, userId, isAnonymous, hasUserSession, consentRequired, ensureSession, refreshAuth } = useAuth();
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [consent, setConsent] = useState({ age: false, terms: false, privacy: false });
@@ -59,6 +60,7 @@ export function ComposePanel() {
   const [restoredInput, setRestoredInput] = useState(false);
   const [myPhoto, setMyPhoto] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoExampleId, setPhotoExampleId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [showInsufficientPass, setShowInsufficientPass] = useState(false);
@@ -82,6 +84,15 @@ export function ComposePanel() {
   const resumedOwnerRef = useRef<string | null>(null);
 
   const job = useCompositionJob(jobId);
+  const photoExample = onboardingStories.find(story => story.id === photoExampleId);
+  const isExamplePair = Boolean(photoFile && photoExample && gif?.id === `preset-${photoExample.sceneId}`);
+  const inputProperties = useMemo(() => ({
+    example: example?.id ?? "none",
+    photo_source: photoFile ? photoExampleId ? "example" : "upload" : "none",
+    photo_example: photoExampleId ?? "none",
+    scene_matches_example: Boolean(example && gif?.id === `preset-${example.sceneId}`),
+    is_example_pair: isExamplePair,
+  }), [example, gif, photoFile, photoExampleId, isExamplePair]);
 
   const prepareSession = useCallback(async () => {
     setSessionError(null);
@@ -106,8 +117,8 @@ export function ComposePanel() {
   }, [jobId, userId, hasUserSession]);
 
   useEffect(() => {
-    if (gif && photoFile) trackEvent("compose_inputs_ready");
-  }, [gif, photoFile]);
+    if (gif && photoFile) trackEvent("compose_inputs_ready", inputProperties);
+  }, [gif, photoFile, inputProperties]);
 
   useEffect(() => {
     if (!hasUserSession) return;
@@ -117,11 +128,12 @@ export function ComposePanel() {
     trackEvent("compose_consent_state", { required: consentRequired, ready: consentReady });
   }, [userId, hasUserSession, consentRequired, consentReady]);
 
-  const setPhotoFromFile = useCallback((file: File) => {
+  const setPhotoFromFile = useCallback((file: File, exampleId: string | null = null) => {
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     const url = URL.createObjectURL(file);
     objectUrlRef.current = url;
     setPhotoFile(file);
+    setPhotoExampleId(exampleId);
     setMyPhoto(url);
   }, []);
 
@@ -129,15 +141,16 @@ export function ComposePanel() {
   useEffect(() => {
     if (jobId) return;
     const saved = localStorage.getItem("compose_gif");
-    const preset = example && scenePresets.find(scene => scene.id === example.sceneId);
+    const preset = requestedExample && scenePresets.find(scene => scene.id === requestedExample.sceneId);
     const restoredGif = preset ? presetGif(preset, window.location.origin) : saved ? safeParseGif(saved) : null;
     const timer = window.setTimeout(() => {
       if (restoredGif) setGif(restoredGif);
+      if (requestedExample) setExample(requestedExample);
       setRestoredInput(true);
       if (saved && localStorage.getItem("compose_gif") === saved) localStorage.removeItem("compose_gif");
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [jobId, example]);
+  }, [jobId, requestedExample]);
 
   useEffect(() => {
     if (jobId || example) return;
@@ -226,6 +239,7 @@ export function ComposePanel() {
       objectUrlRef.current = null;
     }
     setPhotoFile(null);
+    setPhotoExampleId(null);
     setMyPhoto(null);
   }
 
@@ -243,7 +257,7 @@ export function ComposePanel() {
     setFileError(null);
     setPhotoFromFile(file);
     trackEvent("photo_uploaded", { file_type: file.type || "unknown" });
-    trackEvent("photo_selected", { file_type: file.type || "unknown" });
+    trackEvent("photo_selected", { source: "upload", file_type: file.type || "unknown" });
     e.target.value = "";
   }
 
@@ -256,7 +270,7 @@ export function ComposePanel() {
       if (!response.ok) throw new Error("예시 사진을 불러오지 못했어요. 다시 눌러주세요.");
       const blob = await response.blob();
       if (!blob.type.startsWith("image/")) throw new Error("예시 사진을 확인하지 못했어요.");
-      setPhotoFromFile(new File([blob], `${example.id}-example.png`, { type: blob.type }));
+      setPhotoFromFile(new File([blob], `${example.id}-example.png`, { type: blob.type }), example.id);
       trackEvent("photo_selected", { source: "example", example: example.id });
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "예시 사진을 불러오지 못했어요.");
@@ -301,7 +315,7 @@ export function ComposePanel() {
 
     if (result.type === "job") {
       requestCreditBalanceRefresh();
-      trackEvent("composition_requested", { job_id: result.jobId });
+      trackEvent("composition_requested", { job_id: result.jobId, ...inputProperties });
       if (retrySourceRef.current) {
         trackEvent("composition_retried", {
           job_id: result.jobId,
@@ -381,9 +395,14 @@ export function ComposePanel() {
     router.push("/payment/charge");
   }
 
-  function openScenePicker(mode: "browse" | "search") {
+  function openPhotoPicker(control: "photo_card" | "example_pair_notice") {
+    trackEvent(myPhoto ? "photo_change_clicked" : "photo_picker_opened", { control });
+    fileInputRef.current?.click();
+  }
+
+  function openScenePicker(mode: "browse" | "search", control = "scene_navigation") {
     setScenePicker(mode);
-    trackEvent("scene_picker_opened", { mode, has_photo: Boolean(myPhoto), example: example?.id ?? "none" });
+    trackEvent("scene_picker_opened", { mode, control, has_photo: Boolean(myPhoto), example: example?.id ?? "none" });
   }
 
   return (
@@ -431,7 +450,7 @@ export function ComposePanel() {
           <ComposeInputs gif={gif} photo={myPhoto} example={example} busy={samplePhotoLoading}
             picker={scenePicker} onOpenPicker={openScenePicker} onClosePicker={() => setScenePicker(null)}
             onScene={next => { setGif(next); trackEvent("gif_selection_changed", { action: "changed", surface: "compose", photo_preserved: Boolean(photoFile) }); }}
-            onUpload={() => { trackEvent(myPhoto ? "photo_change_clicked" : "photo_picker_opened"); fileInputRef.current?.click(); }}
+            onUpload={() => openPhotoPicker("photo_card")}
             onSample={() => void selectExamplePhoto()} onClearPhoto={clearPhoto} />
           <input ref={fileInputRef} type="file" accept="image/*" disabled={samplePhotoLoading} onChange={handleFileChange} className="hidden" aria-label="합성할 사진" />
           {fileError && <p className={styles.error} role="alert">{fileError}</p>}
@@ -453,7 +472,16 @@ export function ComposePanel() {
                 <label><input type="checkbox" checked={consent.privacy} onChange={event => setConsent({ ...consent, privacy: event.target.checked })} /><span>[필수] <Link href="/privacy" target="_blank">개인정보처리방침</Link> 동의</span></label>
               </fieldset> : <div className={styles.policyRow}><Link href="/privacy" target="_blank" className={styles.policy}>사진 처리 안내</Link></div>}
               {myPhoto && <div className={styles.submit}>
-                <button type="button" onClick={() => { beginCompositionAttempt(); trackEvent("compose_clicked"); void handleCompose(); }}
+                {isExamplePair && <section aria-label="예시 조합 안내" className={styles.exampleNotice}>
+                  <h2>지금은 예시와 같은 조합이에요.</h2>
+                  <p>새로 합성해도 예시와 비슷한 결과가 나올 수 있고, 이용권 1회를 사용해요.</p>
+                  <p>사진이나 장면을 바꿔 나만의 조합을 만들어보세요.</p>
+                  <div className={styles.exampleActions}>
+                    <button type="button" disabled={samplePhotoLoading} onClick={() => openPhotoPicker("example_pair_notice")}>사진 바꾸기</button>
+                    <button type="button" onClick={() => openScenePicker("browse", "example_pair_notice")}>장면 바꾸기</button>
+                  </div>
+                </section>}
+                <button type="button" onClick={() => { beginCompositionAttempt(); trackEvent("compose_clicked", inputProperties); void handleCompose(); }}
                   disabled={!gif || !hasUserSession || !consentReady || samplePhotoLoading} className={styles.makeButton}>합성하기</button>
                 <p>이번 합성에 1회 사용</p>
               </div>}
