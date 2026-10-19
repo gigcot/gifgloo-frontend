@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowRightIcon, ChevronRightIcon, Cross2Icon, PauseIcon, PlayIcon, PlusIcon } from "@radix-ui/react-icons";
+import { ArrowRightIcon, ChevronDownIcon, ChevronRightIcon, Cross2Icon, PauseIcon, PlayIcon, PlusIcon } from "@radix-ui/react-icons";
 import { trackEvent } from "@/shared/lib/umami";
 import { onboardingStories, type OnboardingStory } from "../model/stories";
 import styles from "./HeroOnboarding.module.css";
@@ -40,6 +40,7 @@ export function HeroOnboarding({ onStart }: { onStart: (story: OnboardingStory) 
   const [userPlayed, setUserPlayed] = useState(false);
   const [inView, setInView] = useState(true);
   const [howOpen, setHowOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const elapsed = useRef(0);
@@ -162,7 +163,23 @@ export function HeroOnboarding({ onStart }: { onStart: (story: OnboardingStory) 
         <button className={styles.quiet} type="button" onClick={openHow} aria-haspopup="dialog">어떻게 만드나요?</button>
       </div>
     </div>
-    <p className={styles.footnote}>사진 속 내가, 우리 동물이, 좋아하는 대상이 짤 속으로.</p>
+    <div className={styles.usage}>
+      <button className={`${styles.quiet} ${styles.usageToggle}`} type="button" aria-expanded={usageOpen} aria-controls="onboarding-usage"
+        onClick={() => { pause(); setUsageOpen(open => !open); }}>
+        <span>그래서 이걸 어디에 쓰나요?</span><ChevronDownIcon aria-hidden="true" />
+      </button>
+      <div id="onboarding-usage" className={styles.usageContent} hidden={!usageOpen}>
+        <div>
+          <h2>지금 이 대화에 맞는, 우리만의 짤.</h2>
+          <p>서로 아는 사람이나 대상, 익숙한 장면을 조합해보세요. 우리끼리 통하는 맥락을 담아, 지금 상황에 딱 맞는 표현을 만들어 공유해보세요.</p>
+        </div>
+        <div>
+          <h2>만들어보는 재미, 간직하는 즐거움.</h2>
+          <p>좋아하는 대상을 원하는 장면에 넣어, 보고 싶은 모습을 만들어보세요. 마음에 드는 짤은 간직하며 두고두고 꺼내보세요.</p>
+        </div>
+      </div>
+    </div>
+    <p className={styles.footnote}>대화에 보내도, 나만의 짤로 간직해도 좋아요.</p>
 
     <dialog ref={dialogRef} className={styles.dialog} aria-labelledby="onboarding-how-title" aria-describedby="onboarding-how-description"
       onClose={() => setHowOpen(false)} onCancel={() => setHowOpen(false)}

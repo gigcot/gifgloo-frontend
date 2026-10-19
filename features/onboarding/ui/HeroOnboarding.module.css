@@ -403,6 +403,53 @@
   background: #1e1727;
 }
 
+.usage {
+  margin-top: 4px;
+}
+
+.hero .usageToggle {
+  width: 100%;
+  gap: 8px;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.usageToggle svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.usageToggle[aria-expanded=true] svg {
+  transform: rotate(180deg);
+}
+
+.usageContent {
+  margin-top: 8px;
+  padding: 20px;
+  border: 1px solid #43354f;
+  border-radius: 16px;
+  background: #17131e;
+}
+
+.usageContent>div+div {
+  margin-top: 20px;
+}
+
+.usageContent h2 {
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 650;
+}
+
+.usageContent p {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #c6bbd0;
+}
+
 .hero .footnote {
   font-size: 11px;
   line-height: 1.6;
