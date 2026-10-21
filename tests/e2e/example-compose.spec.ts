@@ -138,9 +138,11 @@ test("the approved example submits its public source GIF only after an explicit 
     await expect.poll(() => lastEvent(page, name)).toMatchObject({
       example: "face-online", photo_source: "example", photo_example: "face-online",
       scene_matches_example: true, is_example_pair: true, flow_id: ready.flow_id,
+      input_revision: ready.input_revision,
     });
   }
   expect((await lastEvent(page, "composition_requested")).attempt_id).toBe((await lastEvent(page, "compose_clicked")).attempt_id);
+  expect(ready.input_revision).not.toBe("unready");
 });
 
 test("example pair notice follows material changes without guessing uploaded files", async ({ page }) => {
@@ -151,6 +153,7 @@ test("example pair notice follows material changes without guessing uploaded fil
   await expect(notice).toHaveCount(0);
   await page.getByRole("button", { name: "예시 사진 써보기", exact: true }).click();
   await expect(notice).toBeVisible();
+  const originalRevision = (await lastEvent(page, "compose_inputs_ready")).input_revision;
 
   const chooser = page.waitForEvent("filechooser");
   await notice.getByRole("button", { name: "사진 바꾸기", exact: true }).click();
@@ -169,6 +172,7 @@ test("example pair notice follows material changes without guessing uploaded fil
   await expect(notice).toHaveCount(0);
   await expect.poll(() => lastEvent(page, "scene_picker_opened")).toMatchObject({ control: "example_pair_notice" });
   await expect.poll(() => lastEvent(page, "compose_inputs_ready")).toMatchObject({ photo_source: "example", scene_matches_example: false, is_example_pair: false });
+  expect((await lastEvent(page, "compose_inputs_ready")).input_revision).not.toBe(originalRevision);
   await page.getByRole("button", { name: "장면 바꾸기", exact: true }).click();
   await page.getByRole("button", { name: "다른 장면 둘러보기", exact: false }).click();
   await sheet.getByRole("button", { name: "접속", exact: true }).click();

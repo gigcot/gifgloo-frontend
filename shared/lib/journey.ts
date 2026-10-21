@@ -5,6 +5,7 @@ type Journey = {
   visible_ms: number;
   attempt_id?: string;
   first_result_at?: number;
+  event_sequence?: number;
 };
 
 let journey: Journey | null = null;
@@ -49,12 +50,20 @@ export function journeyContext(): Record<string, string | number | boolean> {
   return {
     experience_version: "example-compose-v6",
     flow_id: flow.flow_id, flow_origin: flow.origin,
+    flow_started_at: flow.started_at,
     flow_elapsed_ms: Math.max(0, Date.now() - flow.started_at),
     flow_visible_ms: flow.visible_ms + (visibleSince === null ? 0 : Date.now() - visibleSince),
     traffic_type: process.env.NEXT_PUBLIC_ANALYTICS_INTERNAL === "true" ? "internal" : "external",
     ...(flow.attempt_id ? { attempt_id: flow.attempt_id } : {}),
     ...(flow.first_result_at ? { since_first_result_ms: Date.now() - flow.first_result_at } : {}),
   };
+}
+
+export function nextJourneyEventSequence(): number {
+  const flow = current();
+  flow.event_sequence = (flow.event_sequence ?? 0) + 1;
+  save();
+  return flow.event_sequence;
 }
 
 export function beginCompositionAttempt(): void {

@@ -1,5 +1,5 @@
 import { getCampaignAttribution } from "./campaign-attribution";
-import { journeyContext } from "./journey";
+import { journeyContext, nextJourneyEventSequence } from "./journey";
 import { jobOriginContext } from "./job-origin";
 
 type EventData = Record<string, string | number | boolean>;
@@ -62,6 +62,7 @@ export function trackEvent(eventName: string, eventData?: EventData): void {
       ...(jobId || resultEvent ? jobOriginContext(jobId) : {}),
       ...getCampaignAttribution(), analytics_schema_version: "2",
       analytics_provider: "posthog",
+      flow_event_sequence: nextJourneyEventSequence(), measurement_contract_version: "3",
     },
     timestamp: new Date(),
     userId: currentUserId,

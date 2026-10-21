@@ -80,6 +80,7 @@ export function ComposePanel() {
   const retrySourceRef = useRef<RetrySource | null>(null);
   const refreshedSurveyJobRef = useRef<string | null>(null);
   const previousRequestRef = useRef<{ gifId: string | number; file: File } | null>(null);
+  const retryJobRef = useRef<string | null>(null);
   const lastConsentStateRef = useRef<string | null>(null);
   const entryJobRef = useRef(jobId);
   const resumedOwnerRef = useRef<string | null>(null);
@@ -87,13 +88,15 @@ export function ComposePanel() {
   const job = useCompositionJob(jobId);
   const photoExample = onboardingStories.find(story => story.id === photoExampleId);
   const isExamplePair = Boolean(photoFile && photoExample && gif?.id === `preset-${photoExample.sceneId}`);
+  const inputRevision = useMemo(() => gif && photoFile ? crypto.randomUUID() : "unready", [gif, photoFile]);
   const inputProperties = useMemo(() => ({
+    input_revision: inputRevision,
     example: example?.id ?? "none",
     photo_source: photoFile ? photoExampleId ? "example" : "upload" : "none",
     photo_example: photoExampleId ?? "none",
     scene_matches_example: Boolean(example && gif?.id === `preset-${example.sceneId}`),
     is_example_pair: isExamplePair,
-  }), [example, gif, photoFile, photoExampleId, isExamplePair]);
+  }), [example, gif, photoFile, photoExampleId, isExamplePair, inputRevision]);
 
   const prepareSession = useCallback(async () => {
     setSessionError(null);
@@ -118,8 +121,9 @@ export function ComposePanel() {
   }, [jobId, userId, hasUserSession]);
 
   useEffect(() => {
+    if (restoredInput && !jobId) trackEvent("compose_input_state_changed", { ...inputProperties, input_ready: Boolean(gif && photoFile) });
     if (gif && photoFile) trackEvent("compose_inputs_ready", inputProperties);
-  }, [gif, photoFile, inputProperties]);
+  }, [gif, photoFile, inputProperties, restoredInput, jobId]);
 
   useEffect(() => {
     if (!hasUserSession) return;
@@ -324,12 +328,16 @@ export function ComposePanel() {
       if (retrySourceRef.current) {
         trackEvent("composition_retried", {
           job_id: result.jobId,
+          ...(retryJobRef.current ? { previous_job_id: retryJobRef.current } : {}),
           from_status: retrySourceRef.current,
-          same_gif: previousRequestRef.current?.gifId === gif.id,
-          same_photo: previousRequestRef.current?.file === photoFile,
+          ...(previousRequestRef.current ? {
+            same_gif: previousRequestRef.current.gifId === gif.id,
+            same_photo: previousRequestRef.current.file === photoFile,
+          } : {}),
           survey_state: survey.status === "done" ? survey.submitted ? "submitted" : "not_submitted" : "unknown",
         });
         retrySourceRef.current = null;
+        retryJobRef.current = null;
       }
       previousRequestRef.current = { gifId: gif.id, file: photoFile };
       router.replace(`/compose?job=${encodeURIComponent(result.jobId)}`, { scroll: false });
@@ -375,6 +383,7 @@ export function ComposePanel() {
       jobId ? { job_id: jobId } : undefined,
     );
     retrySourceRef.current = source;
+    retryJobRef.current = jobId;
     if (source === "completed" && userId) {
       setEvaluateSurveyReminder(true);
       void refreshExp001SurveyStatus(authFetch, userId);

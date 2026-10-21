@@ -96,6 +96,15 @@ class SetupTests(unittest.TestCase):
             setup.provision(client, setup.definitions.build_definitions(), apply=True)
         self.assertEqual(client.writes, [])
 
+    def test_observation_cutoff_is_explicit_and_separate_from_entry_period(self):
+        desired = setup.definitions.build_definitions(observation_cutoff='2026-10-21T18:00:00+09:00')
+        source = desired[0]['query']['source']
+        self.assertIn("parseDateTimeBestEffort('2026-10-21T18:00:00+09:00')", source['query'])
+        self.assertIn('{filters.dateRange.from}', source['query'])
+        self.assertEqual(source['filters']['dateRange']['date_from'], '-7d')
+        with self.assertRaisesRegex(ValueError, 'timezone'):
+            setup.definitions.build_definitions(observation_cutoff='2026-10-21T18:00:00')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -10,6 +10,7 @@ function harness() {
   const window = {};
   const storage = new Map();
   let currentAttempt = 'attempt-A';
+  let sequence = 0;
   let distinctId = 'device';
   let identified;
   const moduleCache = new Map();
@@ -20,7 +21,7 @@ function harness() {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
     }).outputText, { exports, window, console, Date,
       sessionStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
-      require: dependency => dependency === './journey' ? { journeyContext: () => ({ flow_id: 'visit-flow', attempt_id: currentAttempt, experience_version: 'example-compose-v6' }) }
+      require: dependency => dependency === './journey' ? { journeyContext: () => ({ flow_id: 'visit-flow', attempt_id: currentAttempt, experience_version: 'example-compose-v6' }), nextJourneyEventSequence: () => ++sequence }
         : dependency === './campaign-attribution' ? { getCampaignAttribution: () => ({ utm_campaign: 'test' }) } : load(dependency.slice(2)),
     });
     moduleCache.set(name, exports);

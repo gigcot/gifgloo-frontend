@@ -106,9 +106,16 @@ test("anonymous home journey reaches result, download, link, retry and return wi
   expect(stages.every((event) => event.data.flow_origin === "home")).toBe(true);
   const indices = stages.map((event) => events.indexOf(event));
   expect(indices).toEqual([...indices].sort((a, b) => a - b));
+  const sequence = stages.map(event => Number(event.data.flow_event_sequence));
+  expect(sequence.every((value, index) => index === 0 || value > sequence[index - 1])).toBe(true);
+  expect(stages.every(event => event.data.flow_started_at === stages[0].data.flow_started_at)).toBe(true);
   expect(JSON.stringify(events)).not.toContain("icon.png");
   expect(events.some((event) => event.name === "signup_completed")).toBe(false);
   expect(state.oauth).toBe(0);
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect.poll(() => recordedEvents(page, "composition_retried")).toContainEqual(expect.objectContaining({
+    previous_job_id: "guest-job-1", job_id: "guest-job-2", from_status: "completed", same_gif: true, same_photo: true,
+  }));
   await page.goto("/my-assets");
   await page.getByAltText("합성 결과").click();
   await expect(page.getByRole("button", { name: "GIF 저장", exact: true })).toBeVisible();

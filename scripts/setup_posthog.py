@@ -151,7 +151,10 @@ def main():
     parser.add_argument('--print-definitions', action='store_true')
     args = parser.parse_args()
     env = load_env(args.env_file)
-    desired = definitions.build_definitions(tuple(filter(None, env.get('POSTHOG_INTERNAL_ACCOUNT_IDS', '').split(','))))
+    desired = definitions.build_definitions(
+        tuple(filter(None, env.get('POSTHOG_INTERNAL_ACCOUNT_IDS', '').split(','))),
+        env.get('POSTHOG_OBSERVATION_CUTOFF'),
+    )
     if args.print_definitions:
         print(json.dumps({'dashboard': definitions.DASHBOARD, 'insights': desired}, ensure_ascii=False, indent=2))
         return
