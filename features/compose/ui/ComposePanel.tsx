@@ -18,7 +18,7 @@ import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
 import { CompletionNotificationButton } from "./CompletionNotificationButton";
 import { PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 import { rememberJobOrigin } from "@/shared/lib/job-origin";
 import { beginCompositionAttempt, journeyContext } from "@/shared/lib/journey";
 import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from "@/features/auth/model/signup-consent";

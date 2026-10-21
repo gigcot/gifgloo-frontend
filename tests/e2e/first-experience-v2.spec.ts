@@ -10,7 +10,6 @@ const gif = { id: "hippo", slug: "hippo", title: "물 맞는 하마", blur_previ
 
 async function setup(page: Page, permission: "granted" | "denied" = "granted", registrationFails = false) {
   const state = { subscriptions: 0, requests: 0, accept: true };
-  await page.route("https://cloud.umami.is/**", route => route.abort());
   await page.route("https://static.klipy.com/**", route => route.fulfill({ contentType: "image/png", path: "public/icon.png" }));
   await page.route("http://localhost:8000/**", async route => {
     const request = route.request(), pathname = new URL(request.url()).pathname;
@@ -42,7 +41,7 @@ async function setup(page: Page, permission: "granted" | "denied" = "granted", r
   await page.context().route("**/frame.gif", route => route.fulfill({ contentType: "image/gif", body: Buffer.concat([still.subarray(0, 19), ...Array(20).fill(still.subarray(19, -1)), Buffer.from([0x3b])]) }));
   await page.addInitScript(({ permission }) => {
     const testState = { permissions: 0, events: [] as { name: string; data: unknown }[], complete: () => {}, disconnect: () => {} };
-    Object.assign(window, { testState, umami: { identify() {}, track(name: string, data: unknown) { testState.events.push({ name, data }); } } });
+    Object.assign(window, { testState, gifglooAnalytics: { get_property: () => sessionStorage.getItem("__analytics_user") ?? undefined, get_distinct_id: () => sessionStorage.getItem("__analytics_user") ?? "e2e-device", reset: () => sessionStorage.removeItem("__analytics_user"),  identify(userId: string) { sessionStorage.setItem("__analytics_user", userId); }, capture(name: string, data: unknown) { testState.events.push({ name, data }); } } });
     class FakeEventSource {
       onmessage: ((event: { data: string }) => void) | null = null;
       onerror: (() => void) | null = null;

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { isGif, type Gif } from "@/entities/gif/model";
 import { fetchSearchPage, fetchTrendingPage } from "@/shared/api/klipy";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 
 export type BrowseSurface = "home" | "compose";
 type BrowseState = {

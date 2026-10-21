@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Gif } from "@/entities/gif/model";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 import { presetGif, scenePresets, type ScenePreset } from "../model/scene-presets";
 import { GifExplorer } from "./GifExplorer";
 import { ScenePreview } from "./ScenePreview";

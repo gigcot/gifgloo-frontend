@@ -39,7 +39,7 @@ function loadBrowser(storage = new Map()) {
         fetchTrendingPage: (page, perPage, signal) => request("", page, perPage, signal),
         fetchSearchPage: request,
       };
-      if (name === "@/shared/lib/umami") return { trackEvent() {} };
+      if (name === "@/shared/lib/analytics") return { trackEvent() {} };
       throw new Error(`Unexpected module: ${name}`);
     },
   };

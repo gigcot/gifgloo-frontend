@@ -10,7 +10,7 @@ import {
   submitExp001Survey,
 } from "@/features/experiment/model/exp-001-survey";
 import { useAuth } from "@/shared/lib/use-auth";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 
 type Props = {
   open: boolean;

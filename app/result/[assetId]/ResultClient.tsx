@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { downloadGif } from "@/shared/lib/download";
 import { ShareButton } from "@/shared/ui/ShareButton";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 
 type Props = {
   resultUrl: string;

@@ -14,7 +14,7 @@ import type { Gif } from "@/entities/gif/model";
 import { safeParseGif } from "@/entities/gif/model";
 import { GifExplorer } from "@/features/gif-search/ui/GifExplorer";
 import { useAuth } from "@/shared/lib/use-auth";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 import { journeyContext } from "@/shared/lib/journey";
 import { useContainedScroll } from "@/shared/ui/use-contained-scroll";
 import { useHomeStage } from "./use-home-stage";

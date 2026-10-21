@@ -6,7 +6,7 @@ import Link from "next/link";
 import { completePortOnePayment } from "@/features/payment/model/payment-api";
 import { Header } from "@/shared/ui/Header";
 import { useAuth } from "@/shared/lib/use-auth";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 
 export default function PortOneReturnPage() {
   const { authFetch } = useAuth();

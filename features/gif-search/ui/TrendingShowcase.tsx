@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Gif } from "@/entities/gif/model";
 import { GifMedia } from "@/entities/gif/ui/GifMedia";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 
 type Props = {
   gifs: Gif[];

@@ -17,6 +17,7 @@
     "lucide-react": "1.57.0",
     "mediabunny": "1.61.4",
     "next": "16.4.0",
+    "posthog-js": "^1.438.13",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

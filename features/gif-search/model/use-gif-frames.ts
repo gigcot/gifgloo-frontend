@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useSyncExternalStore } from "react";
 import { getGifUrl, type Gif } from "@/entities/gif/model";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 
 export type GifFrame = { status: "loading" | "error" } | { status: "ready"; count: number };
 const entries = new Map<string, GifFrame>();

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/shared/lib/use-auth";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 import {
   getCompositionFeedback, submitCompositionFeedback, type AuthFetch,
 } from "@/features/compositions/model/composition-feedback-api";

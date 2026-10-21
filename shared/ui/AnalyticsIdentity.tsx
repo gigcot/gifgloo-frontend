@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/shared/lib/use-auth";
-import { identifyUser, trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 import { getCampaignAttribution } from "@/shared/lib/campaign-attribution";
 import { journeyContext, updateJourneyVisibility } from "@/shared/lib/journey";
 
-export function UmamiIdentity() {
+export function AnalyticsIdentity() {
   const { userId, isLoggedIn } = useAuth();
   const pathname = usePathname();
+  const lastPage = useRef<string | null>(null);
 
   useEffect(() => {
     journeyContext();
@@ -27,8 +28,10 @@ export function UmamiIdentity() {
   }, [pathname]);
 
   useEffect(() => {
-    if (userId) identifyUser(userId);
-  }, [userId]);
+    if (lastPage.current === pathname) return;
+    lastPage.current = pathname;
+    trackEvent("$pageview", { page: pathname });
+  }, [pathname]);
 
   useEffect(() => {
     getCampaignAttribution();

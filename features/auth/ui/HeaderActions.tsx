@@ -10,7 +10,7 @@ import { useExp001SurveyStatus } from "@/features/experiment/model/exp-001-surve
 import { listenForExp001SurveyOpen } from "@/features/experiment/model/exp-001-survey-open";
 import Link from "next/link";
 import { currentPathForPaymentReturn, setPaymentReturnIntent } from "@/shared/lib/payment-return";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 
 type Props = {
   onLogin?: () => void;

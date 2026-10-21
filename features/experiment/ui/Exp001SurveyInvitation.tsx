@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useAuth } from "@/shared/lib/use-auth";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 import { refreshExp001SurveyStatus, useExp001SurveyStatus } from "@/features/experiment/model/exp-001-survey";
 import { requestExp001SurveyOpen } from "@/features/experiment/model/exp-001-survey-open";
 

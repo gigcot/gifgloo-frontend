@@ -9,12 +9,11 @@ async function setupSurvey(page: Page, eligible = true): Promise<SurveySetup> {
   const state: SurveySetup = { submissions: [], balanceRequests: 0 };
   let submitted = false;
 
-  await page.route("https://cloud.umami.is/script.js", (route) => route.abort());
   await page.addInitScript(() => {
     Object.assign(window, {
-      umami: {
-        identify: () => undefined,
-        track: (name: string, data: Record<string, unknown>) => {
+      gifglooAnalytics: { get_property: () => sessionStorage.getItem("__analytics_user") ?? undefined, get_distinct_id: () => sessionStorage.getItem("__analytics_user") ?? "e2e-device", reset: () => sessionStorage.removeItem("__analytics_user"),
+        identify: (userId: string) => sessionStorage.setItem("__analytics_user", userId),
+        capture: (name: string, data: Record<string, unknown>) => {
           const events = JSON.parse(sessionStorage.getItem("test_events") ?? "[]");
           events.push({ name, data });
           sessionStorage.setItem("test_events", JSON.stringify(events));

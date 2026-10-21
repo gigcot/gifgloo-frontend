@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowRightIcon, ChevronDownIcon, ChevronRightIcon, Cross2Icon, PauseIcon, PlayIcon, PlusIcon } from "@radix-ui/react-icons";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 import { onboardingStories, type OnboardingStory } from "../model/stories";
 import styles from "./HeroOnboarding.module.css";
 

@@ -1,4 +1,4 @@
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 
 export function downloadGif(downloadUrl: string, source: string, assetId?: string, jobId?: string): void {
   trackEvent("result_downloaded", { source, ...(jobId ? { job_id: jobId } : {}), ...(assetId ? { asset_id: assetId } : {}) });

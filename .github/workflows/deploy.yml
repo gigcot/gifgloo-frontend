@@ -18,6 +18,9 @@ jobs:
       NEXT_PUBLIC_APP_URL: https://example.com
       NEXT_PUBLIC_PORTONE_STORE_ID: store-test
       NEXT_PUBLIC_PORTONE_CHANNEL_KEY: channel-key-test
+      NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: phc_e2e_synthetic
+      NEXT_PUBLIC_POSTHOG_HOST: http://127.0.0.1:3100/__posthog
+      NEXT_PUBLIC_ANALYTICS_INTERNAL: "true"
 
     steps:
       - name: Checkout repository
@@ -37,6 +40,9 @@ jobs:
 
       - name: Run unit tests
         run: npm run test:unit
+
+      - name: Test PostHog configuration script
+        run: python3 -B -m unittest discover -s tests/posthog -v
 
       - name: Build application
         run: npm run build
@@ -64,6 +70,8 @@ jobs:
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
       NEXT_PUBLIC_PORTONE_STORE_ID: ${{ vars.NEXT_PUBLIC_PORTONE_STORE_ID }}
       NEXT_PUBLIC_PORTONE_CHANNEL_KEY: ${{ vars.NEXT_PUBLIC_PORTONE_CHANNEL_KEY }}
+      NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ vars.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN }}
+      NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}
 
     steps:
       - name: Checkout repository
@@ -81,6 +89,8 @@ jobs:
           test -n "$NEXT_PUBLIC_APP_URL"
           test -n "$NEXT_PUBLIC_PORTONE_STORE_ID"
           test -n "$NEXT_PUBLIC_PORTONE_CHANNEL_KEY"
+          test -n "$NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN"
+          test -n "$NEXT_PUBLIC_POSTHOG_HOST"
 
       - name: Install dependencies
         run: npm ci

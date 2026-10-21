@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 
 test("survey reward is not a purchase and does not expose internal experiment text", async ({ page }) => {
-  await page.route("https://cloud.umami.is/script.js", (route) => route.abort());
   await page.route("**/users/me", (route) => route.fulfill({
     json: { user_id: "history-user", email: "history@example.com" },
   }));

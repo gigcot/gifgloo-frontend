@@ -1,3 +1,5 @@
+> 현재 전송·API 분석 설정은 [PostHog 계측](../analytics/posthog/README.md)을 따른다. 아래 Umami 관련 실행 이력은 과거 검증 근거로 보존하며 실제 외부 사용·사람 수의 증거로 확대하지 않는다.
+
 # EXP-001 tracking
 
 Experiment: https://app.notion.com/p/3e5920d3d9998184b562e08ddd6b0da6

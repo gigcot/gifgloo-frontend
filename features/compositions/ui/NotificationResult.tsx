@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/shared/lib/use-auth";
 import { API_BASE } from "@/shared/lib/api-base";
-import { trackEventOnce } from "@/shared/lib/umami";
+import { trackEventOnce } from "@/shared/lib/analytics";
 import { ResultMedia } from "@/features/compositions/ui/ResultMedia";
 import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
 import { Exp001SurveyInvitation } from "@/features/experiment/ui/Exp001SurveyInvitation";

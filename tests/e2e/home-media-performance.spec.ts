@@ -33,18 +33,17 @@ test("loads only the active story, defers GIF discovery and deduplicates auth lo
   await page.addInitScript(() => {
     const testWindow = window as typeof window & {
       __identifiedUserIds?: string[];
-      umami?: {
-        track: () => void;
+      gifglooAnalytics?: {
+        capture: () => void;
         identify: (userId: string) => void;
       };
     };
     testWindow.__identifiedUserIds = [];
-    testWindow.umami = {
-      track: () => undefined,
-      identify: (userId) => testWindow.__identifiedUserIds?.push(userId),
+    testWindow.gifglooAnalytics = { get_property: () => sessionStorage.getItem("__analytics_user") ?? undefined, get_distinct_id: () => sessionStorage.getItem("__analytics_user") ?? "e2e-device", reset: () => sessionStorage.removeItem("__analytics_user"),
+      capture: () => undefined,
+      identify: (userId) => { sessionStorage.setItem("__analytics_user", userId); testWindow.__identifiedUserIds?.push(userId); },
     };
   });
-  await page.route("https://cloud.umami.is/script.js", (route) => route.abort());
 
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;

@@ -38,7 +38,6 @@ async function openCompletedComposition(
     }));
   });
 
-  await page.route("https://cloud.umami.is/script.js", (route) => route.abort());
   await page.route("http://localhost:8000/users/me", (route) => route.fulfill({
     status: 200,
     headers: API_CORS_HEADERS,

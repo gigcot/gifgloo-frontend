@@ -1,7 +1,7 @@
 import type { Gif } from "@/entities/gif/model";
 import { getGifUrl } from "@/entities/gif/model";
 import { API_BASE } from "@/shared/lib/api-base";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 
 export type Confirmation = {
   code: string;

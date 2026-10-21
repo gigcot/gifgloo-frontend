@@ -23,6 +23,11 @@ export default defineConfig({
     ] : []),
   ],
   webServer: {
+    env: {
+      NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: "phc_e2e_synthetic",
+      NEXT_PUBLIC_POSTHOG_HOST: `${E2E_ORIGIN}/__posthog`,
+      NEXT_PUBLIC_ANALYTICS_INTERNAL: "true",
+    },
     command: process.env.E2E_PRODUCTION === "true"
       ? "npm run start -- --hostname 127.0.0.1 --port 3100"
       : "npm run dev -- --hostname 127.0.0.1 --port 3100",

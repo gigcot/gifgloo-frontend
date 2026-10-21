@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMyCompositions } from "@/features/compositions/model/use-my-compositions";
 import { CompositionDetailModal } from "@/features/compositions/ui/CompositionDetailModal";
 import type { CompositionJob } from "@/features/compositions/model/types";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 
 function StatusBadge({ status }: { status: CompositionJob["status"] }) {
   if (status === "COMPLETED") return null;

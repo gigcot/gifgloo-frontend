@@ -78,7 +78,7 @@ function createHarness(seed = {}) {
     if (name.endsWith('.css')) return new Proxy({}, { get: (_, name) => String(name) });
     if (name === '@/shared/lib/use-auth') return { useAuth: () => ({ authFetch, userId: 'review-user' }) };
     if (name === '@/shared/lib/api-base') return { API_BASE: 'https://offline.invalid' };
-    if (name === '@/shared/lib/umami') return { trackEvent: (name, data) => events.push({ name, data }), trackEventOnce: (_, name, data) => events.push({ name, data }) };
+    if (name === '@/shared/lib/analytics') return { trackEvent: (name, data) => events.push({ name, data }), trackEventOnce: (_, name, data) => events.push({ name, data }) };
     if (name === '@/shared/lib/journey') return { recordFirstResult() {} };
     if (name === '@/shared/lib/download') return { downloadGif() {} };
     if (name === '@/shared/ui/ShareButton') return { ShareButton: 'ShareButton' };
