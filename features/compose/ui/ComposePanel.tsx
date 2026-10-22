@@ -18,7 +18,7 @@ import { setPaymentReturnIntent } from "@/shared/lib/payment-return";
 import { CompletionNotificationButton } from "./CompletionNotificationButton";
 import { PlusIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { CompositionFeedback } from "@/features/compositions/ui/CompositionFeedback";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 import { rememberJobOrigin } from "@/shared/lib/job-origin";
 import { beginCompositionAttempt, journeyContext } from "@/shared/lib/journey";
 import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from "@/features/auth/model/signup-consent";
@@ -80,6 +80,7 @@ export function ComposePanel() {
   const retrySourceRef = useRef<RetrySource | null>(null);
   const refreshedSurveyJobRef = useRef<string | null>(null);
   const previousRequestRef = useRef<{ gifId: string | number; file: File } | null>(null);
+  const retryJobRef = useRef<string | null>(null);
   const lastConsentStateRef = useRef<string | null>(null);
   const entryJobRef = useRef(jobId);
   const resumedOwnerRef = useRef<string | null>(null);
@@ -87,13 +88,15 @@ export function ComposePanel() {
   const job = useCompositionJob(jobId);
   const photoExample = onboardingStories.find(story => story.id === photoExampleId);
   const isExamplePair = Boolean(photoFile && photoExample && gif?.id === `preset-${photoExample.sceneId}`);
+  const inputRevision = useMemo(() => gif && photoFile ? crypto.randomUUID() : "unready", [gif, photoFile]);
   const inputProperties = useMemo(() => ({
+    input_revision: inputRevision,
     example: example?.id ?? "none",
     photo_source: photoFile ? photoExampleId ? "example" : "upload" : "none",
     photo_example: photoExampleId ?? "none",
     scene_matches_example: Boolean(example && gif?.id === `preset-${example.sceneId}`),
     is_example_pair: isExamplePair,
-  }), [example, gif, photoFile, photoExampleId, isExamplePair]);
+  }), [example, gif, photoFile, photoExampleId, isExamplePair, inputRevision]);
 
   const prepareSession = useCallback(async () => {
     setSessionError(null);
@@ -118,8 +121,9 @@ export function ComposePanel() {
   }, [jobId, userId, hasUserSession]);
 
   useEffect(() => {
+    if (restoredInput && !jobId) trackEvent("compose_input_state_changed", { ...inputProperties, input_ready: Boolean(gif && photoFile) });
     if (gif && photoFile) trackEvent("compose_inputs_ready", inputProperties);
-  }, [gif, photoFile, inputProperties]);
+  }, [gif, photoFile, inputProperties, restoredInput, jobId]);
 
   useEffect(() => {
     if (!hasUserSession) return;
@@ -284,6 +288,7 @@ export function ComposePanel() {
     composingRef.current = true;
 
     const originContext = journeyContext();
+    const requestContext = { flow_id: originContext.flow_id, attempt_id: originContext.attempt_id };
     let acceptedOwnerId: string;
     setStage("processing");
     setError(null);
@@ -293,7 +298,7 @@ export function ComposePanel() {
       const session = await ensureSession();
       acceptedOwnerId = session.userId!;
       if (consentRequired) {
-        trackEvent("compose_consent_save", { status: "started" });
+        trackEvent("compose_consent_save", { ...requestContext, status: "started" });
         let response: Response;
         try {
           response = await authFetch(`${API_BASE}/users/me/consents`, {
@@ -301,10 +306,10 @@ export function ComposePanel() {
             body: JSON.stringify({ terms_version: CURRENT_TERMS_VERSION, privacy_version: CURRENT_PRIVACY_VERSION, is_fourteen_or_older: consent.age }),
           });
         } catch (error) {
-          trackEvent("compose_consent_save", { status: "error", reason: "network" });
+          trackEvent("compose_consent_save", { ...requestContext, status: "error", reason: "network" });
           throw error;
         }
-        trackEvent("compose_consent_save", { status: response.ok ? "success" : "error", http_status: response.status });
+        trackEvent("compose_consent_save", { ...requestContext, status: response.ok ? "success" : "error", http_status: response.status });
         if (!response.ok) throw new Error("이용 동의를 저장하지 못했어요. 다시 시도해 주세요.");
         await refreshAuth();
       }
@@ -315,27 +320,32 @@ export function ComposePanel() {
       return;
     }
 
-    const result = await submitComposition(authFetch, gif, photoFile, confirmed);
+    const result = await submitComposition(authFetch, gif, photoFile, confirmed, requestContext);
 
     if (result.type === "job") {
       rememberJobOrigin(result.jobId, acceptedOwnerId, originContext);
       requestCreditBalanceRefresh();
-      trackEvent("composition_requested", { job_id: result.jobId, ...inputProperties });
+      trackEvent("composition_requested", { ...requestContext, job_id: result.jobId, ...inputProperties });
       if (retrySourceRef.current) {
         trackEvent("composition_retried", {
+          ...requestContext,
           job_id: result.jobId,
+          ...(retryJobRef.current ? { previous_job_id: retryJobRef.current } : {}),
           from_status: retrySourceRef.current,
-          same_gif: previousRequestRef.current?.gifId === gif.id,
-          same_photo: previousRequestRef.current?.file === photoFile,
+          ...(previousRequestRef.current ? {
+            same_gif: previousRequestRef.current.gifId === gif.id,
+            same_photo: previousRequestRef.current.file === photoFile,
+          } : {}),
           survey_state: survey.status === "done" ? survey.submitted ? "submitted" : "not_submitted" : "unknown",
         });
         retrySourceRef.current = null;
+        retryJobRef.current = null;
       }
       previousRequestRef.current = { gifId: gif.id, file: photoFile };
       router.replace(`/compose?job=${encodeURIComponent(result.jobId)}`, { scroll: false });
     } else if (result.type === "confirmation") {
       composingRef.current = false;
-      trackEvent("composition_frame_confirmation", { action: "opened" });
+      trackEvent("composition_frame_confirmation", { ...requestContext, action: "opened" });
       setConfirmation(result.confirmation);
       setStage("ready");
     } else if (result.type === "auth_required") {
@@ -375,6 +385,7 @@ export function ComposePanel() {
       jobId ? { job_id: jobId } : undefined,
     );
     retrySourceRef.current = source;
+    retryJobRef.current = jobId;
     if (source === "completed" && userId) {
       setEvaluateSurveyReminder(true);
       void refreshExp001SurveyStatus(authFetch, userId);

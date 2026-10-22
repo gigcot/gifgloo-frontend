@@ -10,13 +10,12 @@ async function setup(context: BrowserContext) {
     source_gif_url: "/icon.png", target_asset_id: null, result_url: "/icon.png",
     result_asset_id: `asset-${id}`, created_at: "2026-10-09T00:00:00Z" });
   await context.addInitScript(() => {
-    window.umami = { identify() {}, track(name, data) {
+    window.gifglooAnalytics = { get_property: () => sessionStorage.getItem("__analytics_user") ?? undefined, get_distinct_id: () => sessionStorage.getItem("__analytics_user") ?? "e2e-device", reset: () => sessionStorage.removeItem("__analytics_user"),  identify(userId: string) { sessionStorage.setItem("__analytics_user", userId); }, capture(name, data) {
       const events = JSON.parse(sessionStorage.getItem("feedback_events") ?? "[]");
       events.push({ name, data });
       sessionStorage.setItem("feedback_events", JSON.stringify(events));
     } };
   });
-  await context.route("https://cloud.umami.is/**", route => route.abort());
   await context.route("http://localhost:8000/**", async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
     if (path === "/users/me") return route.fulfill(state.session

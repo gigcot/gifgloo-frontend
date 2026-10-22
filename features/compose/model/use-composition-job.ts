@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/shared/lib/api-base";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 import { requestCreditBalanceRefresh } from "@/features/credits/model/use-credits";
 import { useAuth } from "@/shared/lib/use-auth";
 

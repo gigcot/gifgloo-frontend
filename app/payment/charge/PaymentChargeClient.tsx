@@ -7,7 +7,7 @@ import { Header } from "@/shared/ui/Header";
 import { HeaderActions } from "@/features/auth/ui/HeaderActions";
 import { useCredits } from "@/features/credits/model/use-credits";
 import { useAuth } from "@/shared/lib/use-auth";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 import {
   completePortOnePayment,
   createPaymentCheckout,

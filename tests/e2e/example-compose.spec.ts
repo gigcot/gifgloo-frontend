@@ -1,13 +1,12 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type Route } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
 async function setup(page: Page, userKind: "anonymous" | "member" = "anonymous") {
   const state = { uploads: 0, submissions: [] as { gif_url: string; upload_id: string }[], queries: [] as string[] };
-  await page.route("https://cloud.umami.is/**", route => route.abort());
   await page.addInitScript(() => {
-    Object.assign(window, { umami: {
-      identify: () => undefined,
-      track: (name: string, data: Record<string, unknown>) => {
+    Object.assign(window, { gifglooAnalytics: { get_property: () => sessionStorage.getItem("__analytics_user") ?? undefined, get_distinct_id: () => sessionStorage.getItem("__analytics_user") ?? "e2e-device", reset: () => sessionStorage.removeItem("__analytics_user"),
+      identify: (userId: string) => sessionStorage.setItem("__analytics_user", userId),
+      capture: (name: string, data: Record<string, unknown>) => {
         const events = JSON.parse(sessionStorage.getItem("test_events") ?? "[]");
         events.push({ name, data });
         sessionStorage.setItem("test_events", JSON.stringify(events));
@@ -139,9 +138,11 @@ test("the approved example submits its public source GIF only after an explicit 
     await expect.poll(() => lastEvent(page, name)).toMatchObject({
       example: "face-online", photo_source: "example", photo_example: "face-online",
       scene_matches_example: true, is_example_pair: true, flow_id: ready.flow_id,
+      input_revision: ready.input_revision,
     });
   }
   expect((await lastEvent(page, "composition_requested")).attempt_id).toBe((await lastEvent(page, "compose_clicked")).attempt_id);
+  expect(ready.input_revision).not.toBe("unready");
 });
 
 test("example pair notice follows material changes without guessing uploaded files", async ({ page }) => {
@@ -152,6 +153,7 @@ test("example pair notice follows material changes without guessing uploaded fil
   await expect(notice).toHaveCount(0);
   await page.getByRole("button", { name: "예시 사진 써보기", exact: true }).click();
   await expect(notice).toBeVisible();
+  const originalRevision = (await lastEvent(page, "compose_inputs_ready")).input_revision;
 
   const chooser = page.waitForEvent("filechooser");
   await notice.getByRole("button", { name: "사진 바꾸기", exact: true }).click();
@@ -170,6 +172,7 @@ test("example pair notice follows material changes without guessing uploaded fil
   await expect(notice).toHaveCount(0);
   await expect.poll(() => lastEvent(page, "scene_picker_opened")).toMatchObject({ control: "example_pair_notice" });
   await expect.poll(() => lastEvent(page, "compose_inputs_ready")).toMatchObject({ photo_source: "example", scene_matches_example: false, is_example_pair: false });
+  expect((await lastEvent(page, "compose_inputs_ready")).input_revision).not.toBe(originalRevision);
   await page.getByRole("button", { name: "장면 바꾸기", exact: true }).click();
   await page.getByRole("button", { name: "다른 장면 둘러보기", exact: false }).click();
   await sheet.getByRole("button", { name: "접속", exact: true }).click();
@@ -220,4 +223,45 @@ test("closing scene selection and a failed sample photo leave inputs usable", as
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByAltText("my photo")).toBeVisible();
   expect(state.submissions).toHaveLength(0);
+});
+
+test("pending submissions keep their original attempt after another compose screen starts", async ({ page }) => {
+  await setup(page);
+  const submissions: Route[] = [];
+  await page.route("**/compositions/from-upload", route => { submissions.push(route); });
+  await page.route("**/compositions/pending-job-*/status", route => route.fulfill({
+    contentType: "text/event-stream", body: 'data: {"status":"PENDING"}\n\n',
+  }));
+  await page.goto("/compose?example=face-online");
+  await page.getByRole("button", { name: "예시 사진 써보기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect.poll(() => submissions.length).toBe(1);
+  const firstClick = await lastEvent(page, "compose_clicked");
+
+  await page.locator("header").getByRole("link", { name: "gifgloo", exact: true }).click();
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("button", { name: "예시 사진 써보기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect.poll(() => submissions.length).toBe(2);
+  const secondClick = await lastEvent(page, "compose_clicked");
+  expect(secondClick.attempt_id).not.toBe(firstClick.attempt_id);
+
+  await submissions[0].fulfill({ json: { composition_job_id: "pending-job-first" } });
+  await expect.poll(() => lastEvent(page, "composition_requested")).toMatchObject({
+    job_id: "pending-job-first", flow_id: firstClick.flow_id,
+    attempt_id: firstClick.attempt_id, input_revision: firstClick.input_revision,
+    origin_attempt_id: firstClick.attempt_id,
+  });
+  await expect.poll(() => lastEvent(page, "composition_request_step")).toMatchObject({
+    phase: "submit", status: "success", attempt_id: firstClick.attempt_id,
+  });
+  await submissions[1].fulfill({ json: { composition_job_id: "pending-job-second" } });
+  await expect.poll(() => lastEvent(page, "composition_requested")).toMatchObject({
+    job_id: "pending-job-second", flow_id: secondClick.flow_id,
+    attempt_id: secondClick.attempt_id, input_revision: secondClick.input_revision,
+    origin_attempt_id: secondClick.attempt_id,
+  });
+  await expect.poll(() => lastEvent(page, "composition_request_step")).toMatchObject({
+    phase: "submit", status: "success", attempt_id: secondClick.attempt_id,
+  });
 });

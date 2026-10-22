@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Footer } from "@/shared/ui/Footer";
-import { UmamiIdentity } from "@/shared/ui/UmamiIdentity";
+import { AnalyticsIdentity } from "@/shared/ui/AnalyticsIdentity";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,13 +17,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="antialiased">
-        <Script
-          src="https://cloud.umami.is/script.js"
-          data-website-id="8290b22d-046d-42de-802e-bad85d1cb8ca"
-          data-performance="true"
-          strategy="afterInteractive"
-        />
-        <UmamiIdentity />
+        <AnalyticsIdentity />
         {children}
         <Footer />
       </body>

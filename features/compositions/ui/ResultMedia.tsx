@@ -6,7 +6,7 @@ import { API_BASE } from "@/shared/lib/api-base";
 import { downloadGif } from "@/shared/lib/download";
 import { recordFirstResult } from "@/shared/lib/journey";
 import { useAuth } from "@/shared/lib/use-auth";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 import { ShareButton } from "@/shared/ui/ShareButton";
 import { decodeResult, downloadResultFile, encodeResultMp4, releaseResult, type DecodedResult } from "../lib/result-media";
 import styles from "./ResultMedia.module.css";

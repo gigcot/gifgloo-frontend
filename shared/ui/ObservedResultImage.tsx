@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { trackEvent, trackEventOnce } from "@/shared/lib/umami";
+import { trackEvent, trackEventOnce } from "@/shared/lib/analytics";
 import { recordFirstResult } from "@/shared/lib/journey";
 
 export function ObservedResultImage({ src, jobId, assetId, source, className }: {

@@ -9,7 +9,7 @@ export default function PrivacyPage() {
       <section>
         <h2 className="text-base font-bold text-white">1. 개인정보 처리 목적</h2>
         <p className="mt-3">
-          회사는 회원 식별 및 로그인, AI 기반 GIF 이미지 합성, 결과물 제공·보관, 결제·환불 처리, 부정 이용 방지 및 고객지원 목적으로 개인정보를 처리합니다.
+          회사는 회원 식별 및 로그인, AI 기반 GIF 이미지 합성, 결과물 제공·보관, 결제·환불 처리, 부정 이용 방지, 고객지원 및 서비스 이용 흐름 분석 목적으로 개인정보를 처리합니다.
           수집한 개인정보는 안내한 목적 외의 용도로 이용하지 않으며, 목적이 변경되는 경우 관계 법령에 따른 절차를 거칩니다.
         </p>
       </section>
@@ -59,6 +59,7 @@ export default function PrivacyPage() {
           <li>Cloudflare R2(APAC 위치 힌트): 업로드 파일 및 생성 결과물 저장</li>
           <li>Amazon Web Services 서울 리전: GIF 처리 작업 실행</li>
           <li>OpenAI: AI 이미지 분석 및 GIF 이미지 합성</li>
+          <li>PostHog(미국 프로젝트): 페이지 조회, 서비스 이용 이벤트, 계정·브라우저 및 작업 식별자를 이용한 이용 흐름·성능 분석</li>
         </ul>
         <p className="mt-3">
           AI 합성에 필요한 업로드 사진과 GIF 프레임은 결과물 생성을 위해 외부 AI 처리 과정에서 처리될 수 있습니다.
@@ -69,11 +70,12 @@ export default function PrivacyPage() {
 
       <section className="mt-8 border-t border-white/10 pt-8">
         <h2 className="text-base font-bold text-white">6. 쿠키 및 브라우저 저장소</h2>
-        <p className="mt-3">회사는 로그인 상태 유지와 화면 간 선택 항목 복원을 위해 쿠키와 브라우저 저장소를 사용합니다.</p>
+        <p className="mt-3">회사는 로그인 상태 유지, 화면 간 선택 항목 복원 및 서비스 이용 흐름 분석을 위해 쿠키와 브라우저 저장소를 사용합니다.</p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>로그인 인증 쿠키: 로그인 상태 확인에 사용하며 로그아웃 또는 쿠키 만료 시까지 보관됩니다.</li>
           <li>Klipy 검색 식별자: GIF 검색 기능 제공에 사용하며 브라우저 데이터가 삭제될 때까지 보관됩니다.</li>
           <li>선택한 GIF와 업로드 사진의 임시 데이터: 로그인 또는 화면 이동 뒤 선택 항목 복원에 사용하며 합성 화면에서 복원될 때까지 보관됩니다.</li>
+          <li>분석 식별자와 유입·작업 연결 정보: 브라우저와 이용 흐름을 구분하고 유입 경로 및 작업 후 행동을 연결하는 데 사용합니다. 탭 저장 정보는 탭이 닫힐 때, 로컬 저장 정보는 브라우저 데이터 삭제 시 제거되며 계정 전환·로그아웃 시 분석 식별자를 초기화합니다.</li>
         </ul>
         <p className="mt-3">
           이용자는 브라우저 설정에서 쿠키와 저장 데이터를 삭제하거나 저장을 제한할 수 있습니다. 다만 이 경우 로그인 유지 또는 선택 항목 복원 기능이 정상적으로 동작하지 않을 수 있습니다.

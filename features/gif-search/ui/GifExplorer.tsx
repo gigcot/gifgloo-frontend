@@ -4,7 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeftIcon, Cross2Icon, HamburgerMenuIcon, MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import type { Gif } from "@/entities/gif/model";
 import { useContainedScroll } from "@/shared/ui/use-contained-scroll";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 import { findTopicMatches, loadGifTaxonomy, type GifBrowseCategory, type GifTopic } from "../model/taxonomy";
 import { rememberGifBrowsePosition, saveGifBrowseSession, useGifBrowser } from "../model/use-gif-browser";
 import { GifBrowserGrid } from "./GifBrowserGrid";

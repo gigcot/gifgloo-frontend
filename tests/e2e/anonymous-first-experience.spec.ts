@@ -5,19 +5,16 @@ const gif = {
   file: { hd: { gif: { url: "/icon.png", width: 320, height: 320, size: 1 } }, md: { gif: { url: "/icon.png", width: 320, height: 320, size: 1 } }, sm: {}, xs: {} },
 };
 
-async function setup(page: Page, mode: "normal" | "blocked" | "offline" = "normal", liveRun?: string) {
+async function setup(page: Page, mode: "normal" | "blocked" | "offline" = "normal") {
   const state = { sessionCalls: 0, consents: 0, uploads: 0, compositions: 0, shares: 0, surveys: 0, oauth: 0, submitted: false };
   let consentRequired = true;
-  const userId = liveRun ? `qa-${liveRun}` : "guest-user";
-  if (!liveRun) {
-    await page.route("https://cloud.umami.is/**", (route) => route.abort());
-    await page.addInitScript(() => {
-      Object.assign(window, { umami: { identify: () => undefined, track: (name: string, data: unknown) => {
-        const events = JSON.parse(sessionStorage.getItem("test_events") ?? "[]");
-        events.push({ name, data }); sessionStorage.setItem("test_events", JSON.stringify(events));
-      } } });
-    });
-  }
+  const userId = "guest-user";
+  await page.addInitScript(() => {
+    Object.assign(window, { gifglooAnalytics: { get_property: () => sessionStorage.getItem("__analytics_user") ?? undefined, get_distinct_id: () => sessionStorage.getItem("__analytics_user") ?? "e2e-device", reset: () => sessionStorage.removeItem("__analytics_user"),  identify: (userId: string) => sessionStorage.setItem("__analytics_user", userId), capture: (name: string, data: unknown) => {
+      const events = JSON.parse(sessionStorage.getItem("test_events") ?? "[]");
+      events.push({ name, data }); sessionStorage.setItem("test_events", JSON.stringify(events));
+    } } });
+  });
   // Unknown backend calls fail locally; tests must never contact a real synthesis service.
   await page.route("http://localhost:8000/**", async (route) => {
     const req = route.request();
@@ -109,9 +106,16 @@ test("anonymous home journey reaches result, download, link, retry and return wi
   expect(stages.every((event) => event.data.flow_origin === "home")).toBe(true);
   const indices = stages.map((event) => events.indexOf(event));
   expect(indices).toEqual([...indices].sort((a, b) => a - b));
+  const sequence = stages.map(event => Number(event.data.flow_event_sequence));
+  expect(sequence.every((value, index) => index === 0 || value > sequence[index - 1])).toBe(true);
+  expect(stages.every(event => event.data.flow_started_at === stages[0].data.flow_started_at)).toBe(true);
   expect(JSON.stringify(events)).not.toContain("icon.png");
   expect(events.some((event) => event.name === "signup_completed")).toBe(false);
   expect(state.oauth).toBe(0);
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect.poll(() => recordedEvents(page, "composition_retried")).toContainEqual(expect.objectContaining({
+    previous_job_id: "guest-job-1", job_id: "guest-job-2", from_status: "completed", same_gif: true, same_photo: true,
+  }));
   await page.goto("/my-assets");
   await page.getByAltText("합성 결과").click();
   await expect(page.getByRole("button", { name: "GIF 저장", exact: true })).toBeVisible();
@@ -369,77 +373,4 @@ test("unrelated 422 remains an error rather than a frame confirmation", async ({
   const steps = await recordedEvents(page, "composition_request_step");
   expect(steps.filter(event => event.phase === "submit").map(event => event.status)).toEqual(["started", "error"]);
   expect(await recordedEvents(page, "composition_frame_confirmation")).toHaveLength(0);
-});
-
-test("live Umami receives the internal QA journey and corrected branches", async ({ page }, testInfo) => {
-  test.skip(process.env.LIVE_UMAMI !== "true", "Explicit opt-in: sends internal QA events to the configured Umami website.");
-  const run = `qa_measurement_${Date.now()}`;
-  const rejected: string[] = [];
-  const receipts: { name: string; data: Record<string, unknown>; status: number; disabled: boolean }[] = [];
-  await page.route("**/*", route => {
-    const url = new URL(route.request().url());
-    if (url.origin === "http://127.0.0.1:3100" || url.href === "https://cloud.umami.is/script.js") return route.continue();
-    // Backend routes installed below fulfill locally; no other remote service is allowed.
-    return route.abort();
-  });
-  await page.route("https://gateway.umami.is/api/send", route => {
-    const body = route.request().postDataJSON();
-    const payload = body.payload;
-    if (payload.hostname !== "127.0.0.1" || (payload.name && payload.data?.traffic_type !== "internal")) {
-      rejected.push(payload.name ?? body.type);
-      return route.abort();
-    }
-    return route.continue();
-  });
-  page.on("response", async response => {
-    if (response.url() !== "https://gateway.umami.is/api/send" || response.request().method() !== "POST") return;
-    const payload = response.request().postDataJSON().payload;
-    if (!payload.name) return;
-    const result = await response.json();
-    receipts.push({ name: payload.name, data: payload.data, status: response.status(), disabled: result.disabled === true });
-  });
-  await setup(page, "normal", run);
-  let consentFailed = false;
-  await page.route("http://localhost:8000/users/me/consents", route => {
-    if (consentFailed) return route.fallback();
-    consentFailed = true;
-    return route.fulfill({ status: 503, json: {} });
-  });
-  const message = "GIF가 40프레임입니다. 20프레임으로 줄여서 진행됩니다.";
-  await page.route("http://localhost:8000/compositions/from-upload", route => {
-    if (route.request().postDataJSON().acknowledge_frame_reduction) return route.fallback();
-    return route.fulfill({ status: 422, json: { error: "CONFIRMATION_REQUIRED", code: "FRAME_REDUCTION_REQUIRED", message, proposal: { frame_count: 40, max_frames: 20 } } });
-  });
-  await page.goto(`/?utm_source=internal_qa&utm_campaign=${run}`);
-  await page.getByRole("link", { name: "장면 찾기", exact: true }).click();
-  await page.getByRole("button", { name: "Guest GIF 선택", exact: true }).click();
-  await page.getByRole("button", { name: "선택한 GIF 크게 보기", exact: true }).click();
-  await page.getByRole("button", { name: "GIF 미리보기 닫기", exact: true }).click();
-  await page.getByRole("group", { name: "선택한 GIF", exact: true }).getByRole("button", { name: "사진 고르기", exact: true }).click();
-  await expect(page).toHaveURL(/\/compose$/);
-  await expect(page.getByAltText("selected gif")).toBeVisible();
-  await page.locator('input[type="file"]').setInputFiles("public/icon.png");
-  await page.getByRole("checkbox", { name: "전체 동의", exact: true }).check();
-  await page.getByRole("button", { name: "합성하기", exact: true }).click();
-  await expect(page.locator("main").getByRole("alert")).toBeVisible();
-  await page.getByRole("button", { name: "접속 다시 확인" }).click();
-  await page.getByRole("button", { name: "합성하기", exact: true }).click();
-  await page.getByRole("button", { name: "취소", exact: true }).click();
-  await page.getByRole("button", { name: "합성하기", exact: true }).click();
-  await page.getByRole("button", { name: "네, 진행할게요", exact: true }).click();
-  await expect(page.getByAltText("합성 결과")).toBeVisible();
-  await expect.poll(() => receipts.map(event => event.name), { timeout: 20_000 }).toContain("composition_result_viewed");
-  await expect.poll(() => receipts.filter(event => event.name === "composition_frame_confirmation").length).toBe(4);
-  expect(rejected).toEqual([]);
-  expect(receipts.every(event => event.status === 200 && !event.disabled)).toBe(true);
-  expect(receipts.every(event => event.data.traffic_type === "internal" && event.data.utm_campaign === run)).toBe(true);
-  const funnel = ["home_viewed", "make_intent", "compose_viewed", "compose_inputs_ready", "compose_clicked", "composition_requested", "composition_result_viewed"];
-  expect(funnel.every(name => receipts.some(event => event.name === name))).toBe(true);
-  expect(new Set(receipts.map(event => event.data.flow_id)).size).toBe(1);
-  expect(receipts.filter(event => event.name === "gif_selection_changed")).toHaveLength(1);
-  expect(receipts.some(event => event.name === "gif_selection_changed" && event.data.action === "cleared")).toBe(false);
-  expect(receipts.filter(event => event.name === "compose_consent_save").map(event => event.data.status)).toEqual(expect.arrayContaining(["error", "success"]));
-  expect(receipts.some(event => event.name === "composition_request_step" && event.data.status === "confirmation_required")).toBe(true);
-  await testInfo.attach("umami-receipts", { body: JSON.stringify({ run, receipts }, null, 2), contentType: "application/json" });
-  console.log(JSON.stringify({ run, flow_id: receipts[0].data.flow_id, acceptedEvents: receipts.length, allInternal: true }));
 });

@@ -9,13 +9,12 @@ async function setup(page: Page) {
   const state = { submissions: 0, nextJobId: "return-job", sessions: 0, user: true, ownerId: "owner", status: "PENDING", access: 200,
     gifRequests: [] as string[], submittedGifUrls: [] as string[], failMore: false, delayMore: false, listRequests: 0, listFails: false };
   await page.addInitScript(() => {
-    window.umami = { identify() {}, track(name, data) {
+    window.gifglooAnalytics = { get_property: () => sessionStorage.getItem("__analytics_user") ?? undefined, get_distinct_id: () => sessionStorage.getItem("__analytics_user") ?? "e2e-device", reset: () => sessionStorage.removeItem("__analytics_user"),  identify(userId: string) { sessionStorage.setItem("__analytics_user", userId); }, capture(name, data) {
       const events = JSON.parse(sessionStorage.getItem("explorer_events") ?? "[]");
       events.push({ name, data });
       sessionStorage.setItem("explorer_events", JSON.stringify(events));
     } };
   });
-  await page.route("https://cloud.umami.is/**", route => route.abort());
   await page.route("https://static.klipy.com/**", route => route.fulfill({ contentType: "image/png", path: "public/icon.png" }));
   await page.route("http://localhost:8000/**", async route => {
     const path = new URL(route.request().url()).pathname;

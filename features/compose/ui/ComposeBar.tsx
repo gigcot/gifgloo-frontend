@@ -5,7 +5,7 @@ import { Cross2Icon, EnterFullScreenIcon } from "@radix-ui/react-icons";
 import type { Gif } from "@/entities/gif/model";
 import { GifMedia } from "@/entities/gif/ui/GifMedia";
 import { GifPreviewDialog } from "@/features/gif-search/ui/GifPreviewDialog";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 import styles from "./ComposeBar.module.css";
 
 export function ComposeBar({ selectedGif, onCompose, onClear }: { selectedGif: Gif; onCompose: (gif: Gif) => void; onClear: () => void }) {

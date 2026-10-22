@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { API_BASE } from "./api-base";
 import { getCampaignAttribution } from "./campaign-attribution";
-import { trackEvent } from "./umami";
+import { identifyUser, trackEvent } from "./analytics";
 import { setJobOriginOwner } from "./job-origin";
 
 type AuthState = {
@@ -28,6 +28,7 @@ const authListeners = new Set<() => void>();
 
 function setAuthState(next: AuthState): void {
   setJobOriginOwner(next.userId);
+  identifyUser(next.userId);
   authState = next;
   for (const listener of authListeners) listener();
 }

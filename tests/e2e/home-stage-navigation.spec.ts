@@ -3,7 +3,6 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 async function setup(page: Page) {
   const requests: string[] = [];
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.route("https://cloud.umami.is/**", route => route.abort());
   await page.route("https://static.klipy.com/**", route => route.fulfill({ contentType: "image/png", path: "public/icon.png" }));
   await page.route("http://localhost:8000/**", route => {
     const pathname = new URL(route.request().url()).pathname;

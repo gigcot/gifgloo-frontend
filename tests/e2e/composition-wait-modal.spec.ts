@@ -9,7 +9,6 @@ const API_CORS_HEADERS = {
 
 test("shows a countdown modal and retries composition when the wait ends", async ({ page }) => {
   let compositionRequests = 0;
-  await page.route("https://cloud.umami.is/**", (route) => route.abort());
   await page.route("http://localhost:8000/experiments/exp-001/survey", (route) => route.fulfill({ json: { eligible: false, submitted: false } }));
 
   await page.addInitScript(() => {

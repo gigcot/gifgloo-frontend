@@ -8,7 +8,7 @@ import type { OnboardingStory } from "@/features/onboarding/model/stories";
 import { findScenePreset } from "@/features/gif-search/model/scene-presets";
 import { ScenePreview } from "@/features/gif-search/ui/ScenePreview";
 import { GifSearchSheet } from "@/features/gif-search/ui/GifSearchSheet";
-import { trackEvent } from "@/shared/lib/umami";
+import { trackEvent } from "@/shared/lib/analytics";
 import styles from "./ComposeInputs.module.css";
 
 type Props = {
