@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { gunzipSync } from "node:zlib";
+import path from "node:path";
 
 test.use({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36" });
 
@@ -15,6 +16,9 @@ for (const account of [null, "qa-posthog-account"]) test(`the real SDK sends the
     const url = new URL(request.url());
     if (url.origin === "http://127.0.0.1:3100") {
       if (url.pathname.startsWith("/__posthog/")) {
+        if (/\/web-vitals(?:-with-attribution)?\.js$/.test(url.pathname)) {
+          return route.fulfill({ contentType: "text/javascript", path: path.join(process.cwd(), "node_modules/posthog-js/dist", path.basename(url.pathname)) });
+        }
         if (request.method() === "POST") {
           let body = request.postDataBuffer()!;
           if (body[0] === 0x1f && body[1] === 0x8b) body = gunzipSync(body);
@@ -47,7 +51,16 @@ for (const account of [null, "qa-posthog-account"]) test(`the real SDK sends the
   expect(home.properties.$process_person_profile).toBe(Boolean(account));
   if (account) expect(home.properties.account_id).toBe(account);
   expect(packets.filter(packet => packet.event === "$pageview")).toHaveLength(1);
-  expect(JSON.stringify(packets)).not.toContain("secret-code");
-  expect(JSON.stringify(packets)).not.toContain("secret-token");
+  await expect.poll(() => packets.some(packet => packet.event === "$web_vitals"), { timeout: 20_000 }).toBe(true);
+  const metrics = packets.filter(packet => packet.event === "$web_vitals")
+    .flatMap(packet => Object.entries(packet.properties).filter(([name]) => name.endsWith("_event")).map(([, metric]) => metric as Record<string, unknown>));
+  expect(metrics.length).toBeGreaterThan(0);
+  for (const metric of metrics) {
+    expect(metric.$current_url).toBe("http://127.0.0.1:3100/");
+    if (metric.navigationURL) expect(metric.navigationURL).toBe("http://127.0.0.1:3100/");
+    expect(metric.attribution).toBeUndefined();
+  }
+  expect(JSON.stringify(packets).includes("secret-code")).toBe(false);
+  expect(JSON.stringify(packets).includes("secret-token")).toBe(false);
   expect(remoteRequests).toEqual([]);
 });

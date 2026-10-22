@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type Route } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
 async function setup(page: Page, userKind: "anonymous" | "member" = "anonymous") {
@@ -223,4 +223,45 @@ test("closing scene selection and a failed sample photo leave inputs usable", as
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByAltText("my photo")).toBeVisible();
   expect(state.submissions).toHaveLength(0);
+});
+
+test("pending submissions keep their original attempt after another compose screen starts", async ({ page }) => {
+  await setup(page);
+  const submissions: Route[] = [];
+  await page.route("**/compositions/from-upload", route => { submissions.push(route); });
+  await page.route("**/compositions/pending-job-*/status", route => route.fulfill({
+    contentType: "text/event-stream", body: 'data: {"status":"PENDING"}\n\n',
+  }));
+  await page.goto("/compose?example=face-online");
+  await page.getByRole("button", { name: "예시 사진 써보기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect.poll(() => submissions.length).toBe(1);
+  const firstClick = await lastEvent(page, "compose_clicked");
+
+  await page.locator("header").getByRole("link", { name: "gifgloo", exact: true }).click();
+  await page.getByRole("button", { name: "나도 만들어볼래요!", exact: true }).click();
+  await page.getByRole("button", { name: "예시 사진 써보기", exact: true }).click();
+  await page.getByRole("button", { name: "합성하기", exact: true }).click();
+  await expect.poll(() => submissions.length).toBe(2);
+  const secondClick = await lastEvent(page, "compose_clicked");
+  expect(secondClick.attempt_id).not.toBe(firstClick.attempt_id);
+
+  await submissions[0].fulfill({ json: { composition_job_id: "pending-job-first" } });
+  await expect.poll(() => lastEvent(page, "composition_requested")).toMatchObject({
+    job_id: "pending-job-first", flow_id: firstClick.flow_id,
+    attempt_id: firstClick.attempt_id, input_revision: firstClick.input_revision,
+    origin_attempt_id: firstClick.attempt_id,
+  });
+  await expect.poll(() => lastEvent(page, "composition_request_step")).toMatchObject({
+    phase: "submit", status: "success", attempt_id: firstClick.attempt_id,
+  });
+  await submissions[1].fulfill({ json: { composition_job_id: "pending-job-second" } });
+  await expect.poll(() => lastEvent(page, "composition_requested")).toMatchObject({
+    job_id: "pending-job-second", flow_id: secondClick.flow_id,
+    attempt_id: secondClick.attempt_id, input_revision: secondClick.input_revision,
+    origin_attempt_id: secondClick.attempt_id,
+  });
+  await expect.poll(() => lastEvent(page, "composition_request_step")).toMatchObject({
+    phase: "submit", status: "success", attempt_id: secondClick.attempt_id,
+  });
 });

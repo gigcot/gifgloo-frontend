@@ -19,7 +19,8 @@
 - 명시적 이벤트 전송: `shared/lib/analytics.ts`. schema 2·기존 experience version, UTM 최초 귀속, 현재 flow/attempt와 원래 job 맥락을 유지한다.
 - SDK는 `instrumentation-client.ts`에서 초기화한다. 자동 클릭 수집·세션 녹화·설문·오류 자동 수집·feature flags는 비활성화한다. 마케팅 파라미터 자동 저장도 끄고 기존 UTM 최초 귀속 값을 사용한다. 기존 웹 성능 측정 용도의 web vitals와 페이지 조회는 PostHog 이름으로 수집한다.
 - 인증 상태 조회가 끝날 때까지 초기 이벤트를 보관한다. 계정 전환·로그아웃 때 SDK 식별자를 초기화하고, 발생 시각·계정·원래 작업 맥락을 전송 시점의 값으로 바꾸지 않는다.
-- URL/referrer와 최초 사용자 속성의 URL에서 query/hash를 제거한다. 이메일·원본 사진·파일명·원시 검색어는 추가하지 않는다.
+- 비동기 합성 요청은 시작 시점의 `flow_id`·`attempt_id`를 동의·업로드·접수·재접수 이벤트까지 유지한다. 이전 요청을 기다리며 새 시도를 시작해도 앞선 응답을 새 attempt로 집계하지 않는다.
+- URL/referrer와 최초 사용자 속성의 URL, web vitals에 중첩된 `$current_url`·`navigationURL`에서도 query/hash를 제거한다. `web_vitals_attribution: false`로 성능 항목의 이미지 URL·DOM 대상을 수집하지 않는다. 이메일·원본 사진·파일명·원시 검색어는 추가하지 않는다.
 - `distinct_id`는 분석 식별자이며 사람 수의 직접 증거가 아니다. `account_id`는 기존 서버 UUID이고 익명 계정도 포함한다.
 
 ## 판정 질문과 읽는 순서
@@ -66,7 +67,7 @@
 - 완료·실패와 처리 시간은 브라우저 관측이다. 서버 전체 상태·실패 사유·차감·환불·지불·최초 평가 저장값은 서버 기록이 기준이다. 미완료/미응답은 실패/불만족이 아니다.
 - EXP-001 상세 설문은 현재 exp001_run01 귀속·완료 조건의 **계정 단위** 응답이다. 새 캠페인 전체나 특정 job의 사용 맥락으로 자동 연결하지 않는다. 설문/보상 정책 확대나 응답 DB 연동은 이번 변경에 포함하지 않는다.
 - schema2·external에서 알려진 QA/source/localhost와 등록된 운영자 계정을 제외한다. external은 자연 이용 확정이 아니다. 운영자 계정은 POSTHOG_INTERNAL_ACCOUNT_IDS 쉼표 목록으로 제외할 수 있다. 지인·보상·운영 개입 여부는 별도 실행 근거와 대조해야 한다.
-- 같은 job 결과 뒤 행동만 센다. 시각 동률에서 다른 flow의 선후가 확인되지 않으면 후속 행동으로 보태지 않는다. 재접수의 same_photo는 화면 File 참조 비교다. 탭 최초 결과부터의 since_first_result_ms를 특정 이전 job의 시간으로 쓰지 않는다.
+- 같은 job 결과 뒤 행동만 센다. 시각 동률에서 다른 flow의 선후가 확인되지 않으면 후속 행동으로 보태지 않는다. 재접수도 같은 flow의 발행 순서로 결과 전·후를 나누고, 다른 flow의 동률은 `동일 시각·순서 미상`으로 별도 표시한다. 재접수의 same_photo는 화면 File 참조 비교다. 탭 최초 결과부터의 since_first_result_ms를 특정 이전 job의 시간으로 쓰지 않는다.
 
 ## 검증
 

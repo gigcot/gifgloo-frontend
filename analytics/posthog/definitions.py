@@ -133,11 +133,12 @@ STAGES = [
 ]
 FUNNEL_ROWS = """, stage_rows AS (
     SELECT route, arrayJoin([""" + ', '.join(
-    f"tuple('{label}', {condition}, {denominator})" for label, condition, denominator in STAGES
+    f"tuple('{label}', {condition}, {denominator}, {order})" for order, (label, condition, denominator) in enumerate(STAGES)
 ) + """]) AS stage FROM funnel
 ) SELECT route AS `진입`, stage.1 AS `구간`, count() AS `도착 분모`, countIf(stage.2) AS `도달 flow`,
     countIf(stage.3) AS `이전 구간 분모`, round(100.0 * countIf(stage.2) / nullIf(countIf(stage.3), 0), 1) AS `이전 대비 백분율`
-    FROM stage_rows WHERE route = 'home' OR stage.1 != 'I 만들기 의도' GROUP BY route, stage.1"""
+    FROM stage_rows WHERE route = 'home' OR stage.1 != 'I 만들기 의도' GROUP BY route, stage.1, stage.4
+    ORDER BY route, stage.4"""
 
 MATERIAL = '''multiIf(
     example IN ('none', '미계측', ''), concat('기준 예시 없음 / ', photo_source),
@@ -150,7 +151,7 @@ MATERIAL = '''multiIf(
 SPECS = [
     ('first-value', '01 구간별 순차 퍼널 — 홈·직접 진입 분리',
      'H→I→C→P→K→J→R. 같은 flow, 시간·발행 순서, 준비/클릭/접수의 input_revision, 클릭/접수의 attempt를 확인합니다. 직접 진입은 I를 요구하지 않습니다. 설명 슬라이드 완독은 필수 단계가 아닙니다. 분모 0은 빈값(N/A). 사람 수가 아닌 탭 flow 수입니다.',
-     COHORT + FUNNEL_ROWS + ' ORDER BY `진입`, `구간`'),
+     COHORT + FUNNEL_ROWS),
     ('content-arrival', '02 유입·기기별 구간 비교 — 한 조건씩',
      '캠페인·콘텐츠와 기기를 별도 행으로 비교합니다. 탭 최초 UTM이며 공통 프로필 링크로 개별 영상 귀속을 단정하지 않습니다. external은 자연 이용 확정이 아닙니다. 소수 표본의 차이를 원인 효과로 해석하지 않습니다.',
      COHORT + ''', segments AS (SELECT route, has_ready, has_request, result_viewed, arrayJoin([tuple('콘텐츠', campaign, content), tuple('기기', device, '전체 콘텐츠')]) AS segment FROM funnel) SELECT segment.1 AS `비교 축`, segment.2 AS `조건 1`, segment.3 AS `조건 2`, route AS `진입`,
@@ -198,14 +199,23 @@ SPECS = [
        countIf(nullIf(feedback.job_id, '') IS NULL) AS `응답 미관측 job`
        FROM funnel LEFT JOIN feedback ON funnel.first_job = feedback.job_id WHERE result_viewed = 1'''),
     ('retry', '07 첫 작업 이후 재접수 — 이전 job 명시 연결',
-     'previous_job_id로 코호트 첫 작업과 새 작업을 연결합니다. 파일 동일 여부는 화면의 File 참조 비교입니다. 첫 결과 뒤 재접수와 결과 전 재접수·실패 복구를 나눕니다. 탭의 since_first_result_ms로 이전 job 경과 시간을 대신하지 않습니다. 새 목적의 재사용 여부는 이유·실제 활용 확인이 필요합니다.',
-     COHORT + ''' SELECT coalesce(toString(properties.from_status), '미계측') AS `이전 상태`,
-       coalesce(toString(properties.same_gif), '미상') AS `같은 GIF`, coalesce(toString(properties.same_photo), '미상') AS `같은 파일 참조`,
-       if(result_viewed = 1 AND timestamp >= result_at, '첫 결과 뒤', '첫 결과 관측 전') AS `결과와 순서`,
-       count(DISTINCT scoped.job_id) AS `재접수 job`,
-       round(avg(if(result_viewed = 1 AND timestamp >= result_at, dateDiff('second', result_at, timestamp), NULL)), 1) AS `첫 결과부터 평균 초`
-       FROM scoped JOIN funnel ON toString(properties.previous_job_id) = funnel.first_job
-       WHERE event = 'composition_retried' AND timestamp >= requested_at
+     'previous_job_id로 코호트 첫 작업과 새 작업을 연결합니다. 파일 동일 여부는 화면의 File 참조 비교입니다. 첫 결과 뒤 재접수와 결과 전 재접수·실패 복구를 나누고, 다른 flow의 동일 시각은 순서 미상으로 남깁니다. 탭의 since_first_result_ms로 이전 job 경과 시간을 대신하지 않습니다. 새 목적의 재사용 여부는 이유·실제 활용 확인이 필요합니다.',
+     COHORT + ''', retry_events AS (
+       SELECT scoped.job_id AS retry_job, timestamp AS retried_at, result_at,
+       coalesce(toString(properties.from_status), '미계측') AS from_status,
+       coalesce(toString(properties.same_gif), '미상') AS same_gif, coalesce(toString(properties.same_photo), '미상') AS same_photo,
+       multiIf(result_viewed = 0 OR timestamp < result_at, '첫 결과 관측 전',
+         timestamp > result_at OR arrayExists(v -> v.2.1 = result_at AND v.1 = scoped.flow_id AND v.2 < scoped.pos, view_positions), '첫 결과 뒤',
+         arrayAll(v -> v.2.1 != result_at OR (v.1 = scoped.flow_id AND v.2 > scoped.pos), view_positions), '첫 결과 관측 전',
+         '동일 시각·순서 미상') AS result_order
+       FROM scoped JOIN (SELECT flow_id AS request_flow, first_job, requested_at, request_pos, result_viewed, result_at FROM funnel) AS retry_origin
+         ON toString(properties.previous_job_id) = retry_origin.first_job
+       LEFT JOIN views ON retry_origin.first_job = views.job_id
+       WHERE event = 'composition_retried' AND (timestamp > requested_at OR (scoped.flow_id = request_flow AND scoped.pos > request_pos))
+       ) SELECT from_status AS `이전 상태`, same_gif AS `같은 GIF`, same_photo AS `같은 파일 참조`, result_order AS `결과와 순서`,
+       count(DISTINCT retry_job) AS `재접수 job`,
+       round(avg(if(result_order = '첫 결과 뒤', dateDiff('second', result_at, retried_at), NULL)), 1) AS `첫 결과부터 평균 초`
+       FROM retry_events
        GROUP BY `이전 상태`, `같은 GIF`, `같은 파일 참조`, `결과와 순서` ORDER BY `재접수 job` DESC'''),
     ('measurement-quality', '08 계측 품질 — QA·구버전·연결 누락 포함',
      '이 타일만 선택한 날짜 안의 전체 이벤트를 검사합니다. 새 계약의 flow_started_at/발행 순서/input_revision과 재접수 previous_job_id 누락을 표시합니다. QA·운영자도 포함합니다. 운영자 계정 미등록이면 external에 포함될 수 있습니다.',

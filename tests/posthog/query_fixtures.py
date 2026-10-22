@@ -7,7 +7,7 @@ ENTRY_TO = '2026-10-02 00:00:00'
 CUTOFF = '2026-10-04 00:00:00'
 
 
-def regression_query(definitions, select=None, cutoff=CUTOFF):
+def regression_query(definitions, select=None, cutoff=CUTOFF, extra_events=()):
     rows = []
     start = datetime(2026, 10, 1, tzinfo=timezone.utc)
 
@@ -78,6 +78,8 @@ def regression_query(definitions, select=None, cutoff=CUTOFF):
     # The first request must not join a different attempt's click.
     rows.pop()
     add('new-attempt', 'composition_requested', 3, 6, input_revision='r7', attempt_id='new', job_id='j8')
+    for flow, event, second, sequence, properties in extra_events:
+        add(flow, event, second, sequence, **properties)
 
     def literal(value):
         return "'" + value.replace("'", "''") + "'"
@@ -123,6 +125,14 @@ def validation_cases(definitions):
         "SELECT '06', 'face-online', 'example', 'other', 'true', 'false'",
     ]
     material_sql = 'WITH cases AS (' + ' UNION ALL '.join(material_rows) + ') SELECT case_id, ' + definitions.MATERIAL + ' FROM cases ORDER BY case_id'
+    retry_sql = next(sql for key, _, _, sql in definitions.SPECS if key == 'retry')
+    retry_detail = retry_sql[len(definitions.COHORT):].split(') SELECT from_status AS')[0] + ') SELECT retry_job, result_order FROM retry_events ORDER BY retry_job'
+    retry_events = [
+        ('before-view-only', 'composition_retried', 8, 7, {'job_id': 'retry-before', 'previous_job_id': 'j9'}),
+        ('before-view-only', 'composition_retried', 8, 9, {'job_id': 'retry-after', 'previous_job_id': 'j9'}),
+        ('other-retry-tab', 'composition_retried', 8, 1, {'job_id': 'retry-unknown', 'previous_job_id': 'j9', 'flow_origin': 'result_return'}),
+        ('other-retry-tab', 'composition_retried', 9, 2, {'job_id': 'retry-later', 'previous_job_id': 'j9', 'flow_origin': 'result_return'}),
+    ]
     return [
         ('material-four-choices-and-unknowns', material_sql, [
             ['01', '예시 GIF + 예시 사진'], ['02', '예시 GIF + 직접 파일'],
@@ -130,6 +140,18 @@ def validation_cases(definitions):
             ['05', '기준 예시 없음 / upload'], ['06', '미계측·속성 불일치'],
         ]),
         ('flow-attempt-job-order', regression_query(definitions), EXPECTED),
+        ('funnel-display-order', regression_query(definitions, definitions.FUNNEL_ROWS), [
+            ['direct_compose', label, 1, 1, 1, 100] for label, _, _ in definitions.STAGES if not label.startswith('I ')
+        ] + [
+            ['home', 'H 도착', 8, 8, 8, 100], ['home', 'I 만들기 의도', 8, 8, 8, 100],
+            ['home', 'C GIF 복원된 합성 화면', 8, 7, 8, 87.5], ['home', 'P 입력 준비', 8, 6, 7, 85.7],
+            ['home', 'K 같은 재료로 합성 클릭', 8, 4, 6, 66.7], ['home', 'J 같은 attempt 접수', 8, 3, 4, 75],
+            ['home', 'R 같은 첫 job 결과 표시', 8, 2, 3, 66.7],
+        ]),
+        ('retry-result-order', regression_query(definitions, retry_detail, extra_events=retry_events), [
+            ['retry-after', '첫 결과 뒤'], ['retry-before', '첫 결과 관측 전'],
+            ['retry-later', '첫 결과 뒤'], ['retry-unknown', '동일 시각·순서 미상'],
+        ]),
         ('fixed-followup-cutoff', regression_query(definitions, cutoff='2026-10-02 00:00:00'), earlier),
         ('material-unknown', regression_query(definitions,
             ' SELECT ' + definitions.MATERIAL + ' AS material, count() FROM funnel WHERE first_job != \'\' GROUP BY material ORDER BY material'),

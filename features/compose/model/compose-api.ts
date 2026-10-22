@@ -18,6 +18,7 @@ export type SubmitResult =
   | { type: "error"; message: string };
 
 type AuthFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+type RequestContext = Record<string, string | number | boolean>;
 
 type PreparedUpload = {
   uploadId: string;
@@ -25,9 +26,9 @@ type PreparedUpload = {
 
 const preparedUploads = new WeakMap<File, PreparedUpload>();
 
-async function requestStep<T>(phase: string, action: () => Promise<T>): Promise<T> {
+async function requestStep<T>(phase: string, context: RequestContext, action: () => Promise<T>): Promise<T> {
   const started = performance.now();
-  trackEvent("composition_request_step", { phase, status: "started" });
+  trackEvent("composition_request_step", { ...context, phase, status: "started" });
   try {
     const result = await action();
     let status = result instanceof Response && !result.ok ? "error" : "success";
@@ -35,10 +36,10 @@ async function requestStep<T>(phase: string, action: () => Promise<T>): Promise<
       const body = await result.clone().json().catch(() => null);
       if (body?.error === "CONFIRMATION_REQUIRED") status = "confirmation_required";
     }
-    trackEvent("composition_request_step", { phase, status, duration_ms: Math.round(performance.now() - started), ...(result instanceof Response ? { http_status: result.status } : {}) });
+    trackEvent("composition_request_step", { ...context, phase, status, duration_ms: Math.round(performance.now() - started), ...(result instanceof Response ? { http_status: result.status } : {}) });
     return result;
   } catch (error) {
-    trackEvent("composition_request_step", { phase, status: "error", duration_ms: Math.round(performance.now() - started) });
+    trackEvent("composition_request_step", { ...context, phase, status: "error", duration_ms: Math.round(performance.now() - started) });
     throw error;
   }
 }
@@ -46,13 +47,14 @@ async function requestStep<T>(phase: string, action: () => Promise<T>): Promise<
 async function prepareDirectUpload(
   authFetch: AuthFetch,
   file: File,
+  context: RequestContext,
 ): Promise<PreparedUpload | SubmitResult> {
   const existing = preparedUploads.get(file);
-  if (existing) { trackEvent("composition_request_step", { phase: "upload", status: "cache_reused" }); return existing; }
+  if (existing) { trackEvent("composition_request_step", { ...context, phase: "upload", status: "cache_reused" }); return existing; }
 
   const { prepareImageUpload } = await import("@/features/compose/model/prepare-image-upload");
-  const image = await requestStep("prepare_image", () => prepareImageUpload(file));
-  const prepareResponse = await requestStep("prepare_upload", () => authFetch(`${API_BASE}/compositions/uploads`, {
+  const image = await requestStep("prepare_image", context, () => prepareImageUpload(file));
+  const prepareResponse = await requestStep("prepare_upload", context, () => authFetch(`${API_BASE}/compositions/uploads`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content_type: image.type, size: image.size }),
@@ -80,7 +82,7 @@ async function prepareDirectUpload(
 
   let uploadResponse: Response;
   try {
-    uploadResponse = await requestStep("upload", () => fetch(prepared.upload_url, {
+    uploadResponse = await requestStep("upload", context, () => fetch(prepared.upload_url, {
       method: "PUT",
       headers: prepared.headers as Record<string, string>,
       body: image,
@@ -111,13 +113,14 @@ export async function submitComposition(
   authFetch: AuthFetch,
   gif: Gif,
   photoFile: File,
-  confirmed: boolean
+  confirmed: boolean,
+  context: RequestContext,
 ): Promise<SubmitResult> {
   try {
-    const upload = await prepareDirectUpload(authFetch, photoFile);
+    const upload = await prepareDirectUpload(authFetch, photoFile, context);
     if ("type" in upload) return upload;
 
-    const res = await requestStep("submit", () => authFetch(`${API_BASE}/compositions/from-upload`, {
+    const res = await requestStep("submit", context, () => authFetch(`${API_BASE}/compositions/from-upload`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
