@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMyCompositions } from "@/features/compositions/model/use-my-compositions";
 import { CompositionDetailModal } from "@/features/compositions/ui/CompositionDetailModal";
 import type { CompositionJob } from "@/features/compositions/model/types";
+import { Exp001SurveyInvitation } from "@/features/experiment/ui/Exp001SurveyInvitation";
 import { trackEvent } from "@/shared/lib/analytics";
 
 function StatusBadge({ status }: { status: CompositionJob["status"] }) {
@@ -19,13 +20,16 @@ function StatusBadge({ status }: { status: CompositionJob["status"] }) {
   );
 }
 
-function Banner() {
+function Banner({ showInvitation = true }: { showInvitation?: boolean }) {
   return (
-    <div className="bg-purple-600 px-4 py-5">
-      <div className="mx-auto max-w-2xl">
-        <p className="text-2xl font-black text-white">내가 만든 GIF</p>
+    <>
+      <div className="bg-purple-600 px-4 py-5">
+        <div className="mx-auto max-w-2xl">
+          <p className="text-2xl font-black text-white">내가 만든 GIF</p>
+        </div>
       </div>
-    </div>
+      {showInvitation && <div className="mx-auto max-w-2xl px-4 py-4"><Exp001SurveyInvitation source="my_assets_page" /></div>}
+    </>
   );
 }
 
@@ -69,7 +73,7 @@ export function MyAssetsPage() {
 
   return (
     <>
-      <Banner />
+      <Banner showInvitation={!selectedJob} />
       {state.refreshFailed && <p role="status" className="p-4 text-center text-sm text-white/70">최신 상태를 다시 확인하고 있어요. 아래는 마지막으로 확인한 목록이에요.</p>}
       <div className="mx-auto grid max-w-2xl grid-cols-3 gap-1 pt-1">
         {state.jobs.map((job) => (

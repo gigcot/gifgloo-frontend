@@ -185,7 +185,7 @@ test("shows the non-blocking survey reminder once when starting another composit
   await expect(reminder.getByText("설문에 참여하면 사용횟수 1회를 드려요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "합성하기", exact: true })).toBeVisible();
   await reminder.getByRole("button", { name: "설문 참여하기" }).click();
-  await expect(page.getByRole("dialog").getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("설문 참여하고 추가 이용권 받기")).toBeVisible();
   expect(state.surveyStatusRequests).toBeGreaterThan(1);
 
   await page.getByRole("button", { name: "나중에" }).click();
