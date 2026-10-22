@@ -149,7 +149,9 @@ export function useExp001SurveyStatus(): SurveyStatus {
 export async function refreshExp001SurveyStatus(
   authFetch: AuthFetch,
   userId: string,
+  { reusePending = false }: { reusePending?: boolean } = {},
 ): Promise<void> {
+  if (reusePending && request && requestUserId === userId) return request;
   await loadStatus(userId, authFetch, true);
 }
 

@@ -82,6 +82,24 @@ test("forced refresh supersedes the older request and its cleanup", async () => 
   assert.equal(survey.useExp001SurveyStatus().eligible, true);
 });
 
+test("an invitation reuses a pending read while completion still forces a fresh read", async () => {
+  const survey = loadSurvey();
+  const pending = deferred();
+  const latest = deferred();
+  let calls = 0;
+  const fetch = () => ++calls === 1 ? pending.promise : latest.promise;
+  const loading = survey.refreshExp001SurveyStatus(fetch, "survey-user");
+  const invitation = survey.refreshExp001SurveyStatus(fetch, "survey-user", { reusePending: true });
+  assert.equal(calls, 1);
+  const completed = survey.refreshExp001SurveyStatus(fetch, "survey-user");
+  assert.equal(calls, 2);
+  latest.resolve(response({ eligible: true, submitted: false }));
+  await completed;
+  pending.resolve(response({ eligible: false, submitted: false }));
+  await Promise.all([loading, invitation]);
+  assert.equal(survey.useExp001SurveyStatus().eligible, true);
+});
+
 test("failed POST leaves the pending status request valid", async () => {
   const survey = loadSurvey();
   const pending = deferred();

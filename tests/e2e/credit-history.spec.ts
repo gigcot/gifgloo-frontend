@@ -21,6 +21,7 @@ test("survey reward is not a purchase and does not expose internal experiment te
         { transaction_type: "CHARGE", source_type: "PAYMENT", reason: null },
         { transaction_type: "DEDUCT", source_type: "COMPOSITION", reason: null },
         { transaction_type: "REFUND", source_type: "COMPOSITION", reason: "합성 실패 이용권 복구" },
+        { transaction_type: "CHARGE", source_type: "DAILY_REWARD", reason: "매일 3회 받기" },
       ].map((item, index) => ({
         ...item,
         transaction_id: `transaction-${index}`,
@@ -38,11 +39,12 @@ test("survey reward is not a purchase and does not expose internal experiment te
 
   await page.goto("/payment/history");
   const rows = page.getByRole("listitem");
-  await expect(rows).toHaveCount(5);
+  await expect(rows).toHaveCount(6);
   await expect(rows.nth(0).getByText("설문 참여 보상", { exact: true })).toBeVisible();
   await expect(rows.nth(1).getByText("설문 참여 보상", { exact: true })).toBeVisible();
   await expect(rows.nth(2).getByText("이용권 구매", { exact: true })).toBeVisible();
   await expect(rows.nth(3).getByText("GIF 합성 사용", { exact: true })).toBeVisible();
   await expect(rows.nth(4).getByText("합성 실패 이용권 복구", { exact: true })).toBeVisible();
+  await expect(rows.nth(5).getByText("매일 3회 받기", { exact: true })).toBeVisible();
   await expect(page.getByText(/EXP-001/)).toHaveCount(0);
 });

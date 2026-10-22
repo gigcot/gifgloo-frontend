@@ -153,7 +153,7 @@ test("eligible survey opens above the result and disappears after submission wit
   const invitation = page.getByRole("region", { name: "추가 설문 안내" });
   await invitation.getByRole("button", { name: "설문 참여하기" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
+  await expect(dialog.getByText("설문 참여하고 추가 이용권 받기")).toBeVisible();
   await dialog.getByRole("button", { name: "설문 시작" }).click();
   await dialog.getByLabel("단체 채팅방", { exact: true }).check();
   await dialog.getByLabel("단체 채팅방에 보냈다", { exact: true }).check();

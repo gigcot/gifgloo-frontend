@@ -9,6 +9,7 @@ import {
   type NonExternalUseReason,
   submitExp001Survey,
 } from "@/features/experiment/model/exp-001-survey";
+import { requestDailyRewardMenuOpen } from "../model/daily-reward";
 import { useAuth } from "@/shared/lib/use-auth";
 import { trackEvent } from "@/shared/lib/analytics";
 
@@ -28,7 +29,7 @@ const INTENDED_CONTEXTS: { value: IntendedContext; label: string }[] = [
 ];
 
 const ACTUAL_ACTIONS: { value: ActualAction; label: string }[] = [
-  { value: "viewed_only", label: "결과만 확인했다" },
+  { value: "viewed_only", label: "아직 결과만 확인했어요" },
   { value: "saved", label: "기기에 저장했다" },
   { value: "direct_chat", label: "1:1 채팅에 보냈다" },
   { value: "group_chat", label: "단체 채팅방에 보냈다" },
@@ -173,13 +174,13 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
               🎁
             </div>
             <h2 id="exp001-survey-title" className="mt-5 text-xl font-bold text-white">
-              설문에 참여하시면 이용권 1회를 드립니다
+              설문 참여하고 추가 이용권 받기
             </h2>
             <p className="mt-3 text-sm leading-6 text-white/55">
-              완성된 GIF를 어디에 쓰려고 했고 실제로 어떻게 사용했는지 알려주세요.
-              다음 실험에서 무엇을 개선할지 정하는 데 활용합니다.
+              제출하면 이용권 1회를 바로 드려요.
+              이후에는 프로필에서 매일 3회분을 더 받을 수 있어요.
             </p>
-            <p className="mt-3 text-xs text-white/35">약 1분 · 계정당 1회 지급</p>
+            <p className="mt-3 text-xs text-white/35">설문은 한 번만 · 어떤 답변을 선택해도 같은 혜택</p>
             <div className="mt-7 flex w-full gap-2">
               <button
                 type="button"
@@ -211,7 +212,7 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="exp001-survey-title" className="text-xl font-bold text-white">
-                  완성된 GIF 사용 경험
+                  지금까지의 합성 경험
                 </h2>
               </div>
               <button
@@ -226,7 +227,7 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
 
             <fieldset className="mt-7">
               <legend className="text-sm font-bold text-white">
-                1. 이 GIF를 어디에서 사용하려고 만들었나요?
+                1. 처음 GIF를 만들 때 어떤 용도로 쓰려고 했나요?
               </legend>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {INTENDED_CONTEXTS.map((option) => (
@@ -259,9 +260,9 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
 
             <fieldset className="mt-7">
               <legend className="text-sm font-bold text-white">
-                2. 완성된 GIF로 실제로 무엇을 했나요?
+                2. 지금까지 만든 GIF로 무엇을 했나요?
               </legend>
-              <p className="mt-1 text-xs text-white/40">여러 개 선택할 수 있어요.</p>
+              <p className="mt-1 text-xs text-white/40">아직 사용하지 않았다면 결과만 확인했다고 답해도 괜찮아요. 여러 개 선택할 수 있어요.</p>
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {ACTUAL_ACTIONS.map((option) => (
                   <label
@@ -367,15 +368,17 @@ export function Exp001SurveyDialog({ open, onClose }: Props) {
               이용권 1회가 지급됐어요
             </h2>
             <p className="mt-3 text-sm leading-6 text-white/50">
-              답변 고마워요. 지급된 이용권은 7일 동안 사용할 수 있습니다.
+              받은 이용권은 7일 동안 사용할 수 있어요.
+              오늘 3회분도 더 받을 수 있어요. 다음부터는 오른쪽 위 프로필의 ‘매일 3회 받기’를 눌러주세요.
             </p>
             <button
               type="button"
-              onClick={close}
+              onClick={() => { close(); requestDailyRewardMenuOpen("survey_success"); }}
               className="mt-7 w-full rounded-full bg-purple-600 py-3 text-sm font-bold text-white hover:bg-purple-500"
             >
-              확인
+              프로필에서 3회 더 받기
             </button>
+            <button type="button" onClick={close} className="mt-3 py-2 text-sm text-white/50">나중에 받기</button>
           </div>
         )}
       </section>

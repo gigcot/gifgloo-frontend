@@ -65,7 +65,7 @@
 - 입력 조합은 example/photo_example/scene_matches_example/is_example_pair/photo_source를 함께 해석한다. 예시 없음·속성 불일치는 네 가지 조합에 억지로 배정하지 않는다. 직접 파일은 본인 사진·좋아하는 대상이라는 의미를 증명하지 않는다.
 - 섹션 노출은 있지만 설명의 개별 슬라이드/phase를 끝까지 읽었는지는 계측하지 않는다. 이해했다고 추정하거나 필수 전환 단계로 만들지 않는다. 검색어 원문·사진·파일명·설문 자유문을 추가 수집하지 않는다.
 - 완료·실패와 처리 시간은 브라우저 관측이다. 서버 전체 상태·실패 사유·차감·환불·지불·최초 평가 저장값은 서버 기록이 기준이다. 미완료/미응답은 실패/불만족이 아니다.
-- EXP-001 상세 설문은 현재 exp001_run01 귀속·완료 조건의 **계정 단위** 응답이다. 새 캠페인 전체나 특정 job의 사용 맥락으로 자동 연결하지 않는다. 설문/보상 정책 확대나 응답 DB 연동은 이번 변경에 포함하지 않는다.
+- EXP-001 상세 설문은 유입 캠페인과 관계없이 합성 1회 이상 완료한 **계정 단위** 응답이다. 특정 job의 사용 맥락으로 자동 연결하지 않는다. 설문 즉시 1회 보상과 설문 완료자의 일일 3회 지급을 구분한다. `survey_reward_offer_viewed`, `daily_reward_menu_opened/offer_viewed/claim_clicked/claim_confirmed/claim_failed`, `pass_exhausted`를 추가 수집한다. 신규 지급은 서버의 `DAILY_REWARD` 거래와 lot를 기준으로 확인하고 실제 소비는 lot→차감 transaction→job으로 연결한다. 기존 보드는 이 서버 집계를 자동 포함하지 않으며 백엔드 `analytics/daily-rewards/report.sql`과 사용자별 관찰을 함께 사용한다.
 - schema2·external에서 알려진 QA/source/localhost와 등록된 운영자 계정을 제외한다. external은 자연 이용 확정이 아니다. 운영자 계정은 POSTHOG_INTERNAL_ACCOUNT_IDS 쉼표 목록으로 제외할 수 있다. 지인·보상·운영 개입 여부는 별도 실행 근거와 대조해야 한다.
 - 같은 job 결과 뒤 행동만 센다. 시각 동률에서 다른 flow의 선후가 확인되지 않으면 후속 행동으로 보태지 않는다. 재접수도 같은 flow의 발행 순서로 결과 전·후를 나누고, 다른 flow의 동률은 `동일 시각·순서 미상`으로 별도 표시한다. 재접수의 same_photo는 화면 File 참조 비교다. 탭 최초 결과부터의 since_first_result_ms를 특정 이전 job의 시간으로 쓰지 않는다.
 

@@ -65,9 +65,10 @@ export function HeaderActions({ onLogin, compact = false }: Props) {
           >
             이용권
           </Link>}
-          {compact ? <><div className="compact-account"><Link href="/my-assets" className="text-action text-sm whitespace-nowrap">내 결과</Link><CreditsBadge compact anonymous={!isLoggedIn} /></div>{isLoggedIn && <UserMenu />}</> : isLoggedIn ? <UserMenu /> : <>
+          {compact ? <><div className="compact-account"><Link href="/my-assets" className="text-action text-sm whitespace-nowrap">내 결과</Link><CreditsBadge compact anonymous={!isLoggedIn} /></div><UserMenu onConnect={() => setShowLogin(true)} /></> : isLoggedIn ? <UserMenu /> : <>
             <Link href="/my-assets" className="text-sm text-white/70">내 결과</Link>
             <button onClick={() => setShowLogin(true)} className="text-sm text-purple-300">계정 연결</button>
+            <UserMenu onConnect={() => setShowLogin(true)} />
           </>}
         </div>
         {showSurveyCta && !compact && (

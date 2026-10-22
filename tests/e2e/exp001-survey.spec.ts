@@ -73,7 +73,7 @@ test("eligible user submits the survey and receives refreshed credit balance", a
 
   await surveyCta.click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("설문에 참여하시면 이용권 1회를 드립니다")).toBeVisible();
+  await expect(dialog.getByText("설문 참여하고 추가 이용권 받기")).toBeVisible();
   const dialogBox = await dialog.boundingBox();
   const viewport = page.viewportSize();
   expect(dialogBox).not.toBeNull();
@@ -136,7 +136,7 @@ test("reason selections toggle, require other text, and are omitted after extern
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "설문 시작" }).click();
   await dialog.getByLabel("그냥 궁금해서", { exact: true }).check();
-  await dialog.getByLabel("결과만 확인했다", { exact: true }).check();
+  await dialog.getByLabel("아직 결과만 확인했어요", { exact: true }).check();
   const reasons = dialog.getByRole("group", { name: /사용하지 않은 이유를 모두/ });
   const other = reasons.getByLabel("기타", { exact: true });
   const submit = dialog.getByRole("button", { name: "제출하고 이용권 1회 받기" });

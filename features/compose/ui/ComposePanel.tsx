@@ -27,6 +27,8 @@ import {
   refreshExp001SurveyStatus,
   useExp001SurveyStatus,
 } from "@/features/experiment/model/exp-001-survey";
+import { Exp001SurveyInvitation } from "@/features/experiment/ui/Exp001SurveyInvitation";
+import { requestDailyRewardMenuOpen } from "@/features/experiment/model/daily-reward";
 import { requestExp001SurveyOpen } from "@/features/experiment/model/exp-001-survey-open";
 import { onboardingStories } from "@/features/onboarding/model/stories";
 import { presetGif, scenePresets } from "@/features/gif-search/model/scene-presets";
@@ -353,6 +355,7 @@ export function ComposePanel() {
       setStage("ready");
       setSessionError("접속 상태를 다시 확인해 주세요. 선택한 GIF와 사진은 유지돼요.");
     } else if (result.type === "insufficient_credit") {
+      trackEvent("pass_exhausted", { survey_state: survey.status === "done" ? survey.submitted ? "submitted" : "not_submitted" : "unknown" });
       composingRef.current = false;
       setStage("ready");
       setShowInsufficientPass(true);
@@ -439,7 +442,7 @@ export function ComposePanel() {
                   설문에 참여하면 사용횟수 1회를 드려요.
                 </p>
                 <p className="mt-1 text-xs leading-5 text-white/45">
-                  지급 후 7일 동안 사용할 수 있어요.
+                  설문은 한 번만 참여하면 돼요. 이후에는 프로필에서 매일 3회분을 더 받을 수 있어요.
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -517,9 +520,13 @@ export function ComposePanel() {
           >
             <p className="text-center text-base font-bold text-white">사용 가능한 이용권이 없어요</p>
             <p className="text-center text-sm leading-6 text-white/50">
-              {isAnonymous ? "지금 만든 결과는 계속 저장하거나 공유할 수 있어요. 설문 참여 대상이라면 응답 후 1회를 더 받을 수 있어요. 가입해도 무료 횟수가 다시 지급되지는 않아요." : <>합성을 시작하려면 GIF 합성 이용권이 필요합니다.<br />5회 이용권을 구매하시겠어요?</>}
+              {survey.status === "done" && survey.submitted
+                ? "프로필의 ‘매일 3회 받기’에서 오늘 받을 수 있는 이용권을 확인해보세요. 오늘 이미 받았다면 한국시간 자정부터 다시 받을 수 있어요."
+                : survey.status === "done" && survey.eligible
+                  ? "설문에 한 번 참여하면 이용권 1회를 받고, 이후 프로필에서 매일 3회분을 더 받을 수 있어요."
+                  : "지금 만든 결과는 계속 저장하거나 공유할 수 있어요. 합성을 1회 이상 완료하면 설문을 통해 추가 이용권을 받을 수 있어요."}
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setShowInsufficientPass(false)}
                 className="flex-1 rounded-full border border-white/20 py-3 text-sm font-medium text-white/60 transition-colors hover:border-white/40 hover:text-white"
@@ -532,9 +539,12 @@ export function ComposePanel() {
               >
                 이용권 구매
               </button>}
-              {isAnonymous && survey.status === "done" && survey.eligible && !survey.submitted && <button
+              {survey.status === "done" && survey.eligible && !survey.submitted && <button
                 onClick={() => { setShowInsufficientPass(false); requestExp001SurveyOpen(); }}
                 className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white">설문 참여하기</button>}
+              {survey.status === "done" && survey.submitted && <button
+                onClick={() => { setShowInsufficientPass(false); requestDailyRewardMenuOpen("insufficient_pass"); }}
+                className="flex-1 rounded-full bg-purple-600 py-3 text-sm font-bold text-white">매일 3회 받기</button>}
             </div>
           </div>
         </div>
@@ -667,6 +677,7 @@ export function ComposePanel() {
             source="composition_result" onRestart={() => handleReset("completed")}
           /> : <p role="status">결과 파일 정보를 확인할 수 없어요. 잠시 후 다시 열어주세요.</p>}
           {jobId && <div className={resultStyles.feedback}><CompositionFeedback jobId={jobId} source="composition_result" /></div>}
+          <Exp001SurveyInvitation source="composition_result" />
         </div>
       )}
 
