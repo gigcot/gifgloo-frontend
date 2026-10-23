@@ -218,8 +218,9 @@ SPECS = [
        FROM retry_events
        GROUP BY `이전 상태`, `같은 GIF`, `같은 파일 참조`, `결과와 순서` ORDER BY `재접수 job` DESC'''),
     ('measurement-quality', '08 계측 품질 — QA·구버전·연결 누락 포함',
-     '이 타일만 선택한 날짜 안의 전체 이벤트를 검사합니다. 새 계약의 flow_started_at/발행 순서/input_revision과 재접수 previous_job_id 누락을 표시합니다. QA·운영자도 포함합니다. 운영자 계정 미등록이면 external에 포함될 수 있습니다.',
+     '선택한 날짜 안의 전체 이벤트를 검사합니다. 새 계약의 flow_started_at/발행 순서/input_revision과 재접수 previous_job_id 누락을 표시합니다. QA·운영자도 포함하며 등록한 운영자 계정을 별도 행으로 나눕니다. 등록되지 않은 운영자는 external에 포함될 수 있습니다.',
      BASE + ''' SELECT coalesce(toString(properties.traffic_type), '미계측') AS `traffic`,
+       if(__INTERNAL_MATCH__, '등록 운영자', '그 외·미상') AS `계정 구분`,
        coalesce(toString(properties.measurement_contract_version), '구계약·미계측') AS `계약`,
        coalesce(nullIf(toString(properties.utm_campaign), ''), '미상') AS `campaign`, count() AS `발생 횟수`,
        countIf(properties.flow_started_at IS NULL OR properties.flow_event_sequence IS NULL) AS `흐름 시작·순서 누락`,
@@ -227,7 +228,7 @@ SPECS = [
        countIf(event = 'composition_retried' AND properties.previous_job_id IS NULL) AS `이전 job 누락`,
        countIf(properties.job_id IS NOT NULL AND coalesce(toString(properties.origin_linkage), '') != 'known') AS `job origin 미확인`
        FROM selected WHERE event NOT IN ('$identify', '$set', '$set_once', '$web_vitals')
-       GROUP BY `traffic`, `계약`, `campaign` ORDER BY `발생 횟수` DESC'''),
+       GROUP BY `traffic`, `계정 구분`, `계약`, `campaign` ORDER BY `발생 횟수` DESC'''),
     ('unlinked-requests', '09 코호트 밖 접수·첫 작업 중복 — 누락 진단',
      '선택 날짜에 접수됐지만 새 도착 코호트와 연결되지 않은 요청, 최초 위치 동률의 여러 job을 분리합니다. 유지된 오래된 탭·결과 복귀·구계약·진입 누락을 임의로 유입 퍼널에 채우지 않습니다.',
      COHORT + ''', request_diagnostics AS (
@@ -289,14 +290,158 @@ SELECT duration.1 AS `구간`, countIf(duration.2) AS `시작 flow·job`, countI
 
 SPECS = [(key, name, description, COHORT + TIME_ROWS if sql is None else sql) for key, name, description, sql in SPECS]
 
+ALL_JOBS = BASE + ''', requests AS (
+    SELECT job_id, min(pos) AS request_pos,
+      argMin(tuple(flow_id, nullIf(toString(properties.account_id), ''),
+        coalesce(nullIf(toString(properties.utm_source), ''), '미상'),
+        coalesce(nullIf(toString(properties.utm_medium), ''), '미상'),
+        coalesce(nullIf(toString(properties.utm_campaign), ''), '미상'),
+        coalesce(nullIf(toString(properties.utm_content), ''), '미상'),
+        coalesce(toString(properties.photo_source), '미계측')), pos) AS context
+    FROM scoped WHERE event = 'composition_requested' AND job_id IS NOT NULL
+      AND uuid IN (SELECT uuid FROM selected)
+    GROUP BY job_id
+), job_views AS (
+    SELECT requests.job_id AS job_id, min(scoped.pos) AS view_pos,
+      argMin(scoped.flow_id, scoped.pos) AS view_flow
+    FROM requests JOIN scoped ON requests.job_id = scoped.job_id
+    WHERE event = 'composition_result_viewed'
+      AND (timestamp > request_pos.1 OR (scoped.flow_id = context.1 AND scoped.pos > request_pos))
+    GROUP BY requests.job_id
+), job_signals AS (
+    SELECT requests.job_id AS job_id,
+      max(if(event = 'composition_completed', 1, 0)) AS completed,
+      max(if(event = 'composition_failed', 1, 0)) AS failed,
+      max(if(event = 'composition_result_viewed', 1, 0)) AS viewed,
+      max(if(event = 'result_downloaded' AND nullIf(job_views.job_id, '') IS NOT NULL
+        AND (timestamp > view_pos.1 OR (scoped.flow_id = view_flow AND scoped.pos > view_pos)), 1, 0)) AS saved,
+      max(if(event IN ('result_export_download_attempted', 'result_image_copied', 'result_shared') AND nullIf(job_views.job_id, '') IS NOT NULL
+        AND (timestamp > view_pos.1 OR (scoped.flow_id = view_flow AND scoped.pos > view_pos)), 1, 0)) AS exported_or_copied,
+      max(if(event = 'result_file_share_attempted' AND nullIf(job_views.job_id, '') IS NOT NULL
+        AND (timestamp > view_pos.1 OR (scoped.flow_id = view_flow AND scoped.pos > view_pos)), 1, 0)) AS share_attempted,
+      max(if(event = 'result_file_share_resolved' AND nullIf(job_views.job_id, '') IS NOT NULL
+        AND (timestamp > view_pos.1 OR (scoped.flow_id = view_flow AND scoped.pos > view_pos)), 1, 0)) AS share_resolved
+    FROM requests JOIN scoped ON requests.job_id = scoped.job_id
+    LEFT JOIN job_views ON requests.job_id = job_views.job_id
+    WHERE timestamp > request_pos.1 OR (scoped.flow_id = context.1 AND scoped.pos > request_pos)
+    GROUP BY requests.job_id
+), job_retries AS (
+    SELECT job_id, max(if(toString(properties.from_status) = 'failed', 1, 0)) AS failure_retry,
+      max(if(nullIf(toString(properties.previous_job_id), '') IS NULL, 1, 0)) AS missing_previous
+    FROM scoped WHERE event = 'composition_retried' AND job_id IS NOT NULL GROUP BY job_id
+), all_jobs AS (
+    SELECT requests.job_id AS job_id, request_pos, context.1 AS request_flow, context.2 AS account_id,
+      context.3 AS source, context.4 AS medium, context.5 AS campaign, context.6 AS content, context.7 AS photo_source,
+      coalesce(completed, 0) AS completed, coalesce(failed, 0) AS failed, coalesce(viewed, 0) AS viewed,
+      coalesce(saved, 0) AS saved, coalesce(exported_or_copied, 0) AS exported_or_copied,
+      coalesce(share_attempted, 0) AS share_attempted, coalesce(share_resolved, 0) AS share_resolved,
+      coalesce(failure_retry, 0) AS failure_retry, coalesce(missing_previous, 0) AS missing_previous,
+      job_views.view_pos AS view_pos, job_views.view_flow AS view_flow
+    FROM requests LEFT JOIN job_signals ON requests.job_id = job_signals.job_id
+    LEFT JOIN job_retries ON requests.job_id = job_retries.job_id
+    LEFT JOIN job_views ON requests.job_id = job_views.job_id
+)'''
+
+REPEAT_JOBS = BASE + ''', repeat_requests AS (
+    SELECT job_id, min(pos) AS request_pos,
+      argMin(tuple(flow_id, nullIf(toString(properties.account_id), '')), pos) AS context
+    FROM scoped WHERE event = 'composition_requested' AND job_id IS NOT NULL
+      AND uuid IN (SELECT uuid FROM selected) GROUP BY job_id
+), account_requests AS (
+    SELECT context.2 AS account_id, groupArray(tuple(job_id, request_pos, context.1)) AS history
+    FROM repeat_requests WHERE context.2 IS NOT NULL GROUP BY context.2
+), account_results AS (
+    SELECT context.2 AS account_id, groupArray(tuple(scoped.job_id, scoped.pos, scoped.flow_id)) AS results
+    FROM repeat_requests JOIN scoped ON repeat_requests.job_id = scoped.job_id
+    WHERE event = 'composition_result_viewed' AND context.2 IS NOT NULL
+      AND (timestamp > request_pos.1 OR (scoped.flow_id = context.1 AND scoped.pos > request_pos))
+    GROUP BY context.2
+), retry_jobs AS (
+    SELECT job_id, max(if(toString(properties.from_status) = 'failed', 1, 0)) AS failure_retry,
+      max(if(nullIf(toString(properties.previous_job_id), '') IS NULL, 1, 0)) AS missing_previous
+    FROM scoped WHERE event = 'composition_retried' AND job_id IS NOT NULL GROUP BY job_id
+), repeats AS (
+    SELECT repeat_requests.job_id AS job_id, context.2 AS account_id,
+      arrayExists(p -> p.1 != repeat_requests.job_id AND (p.2.1 < request_pos.1 OR
+        (p.3 = context.1 AND p.2 < request_pos)), history) AS additional,
+      arrayExists(p -> p.1 != repeat_requests.job_id AND (p.2.1 < request_pos.1 OR
+        (p.3 = context.1 AND p.2 < request_pos)), results) AS after_result,
+      arrayExists(p -> p.1 != repeat_requests.job_id AND formatDateTime(p.2.1, '%Y-%m-%d', 'Asia/Seoul') <
+        formatDateTime(request_pos.1, '%Y-%m-%d', 'Asia/Seoul'), history) AS later_day,
+      coalesce(failure_retry, 0) AS failure_retry, coalesce(missing_previous, 0) AS missing_previous
+    FROM repeat_requests LEFT JOIN account_requests ON context.2 = account_requests.account_id
+    LEFT JOIN account_results ON context.2 = account_results.account_id
+    LEFT JOIN retry_jobs ON repeat_requests.job_id = retry_jobs.job_id
+)'''
+
+REWARD = BASE + ''', reward_accounts AS (
+    SELECT nullIf(toString(properties.account_id), '') AS account_id,
+      min(timestamp) AS first_claim_at,
+      min(pos) AS first_claim_pos, argMin(flow_id, pos) AS first_claim_flow,
+      count(DISTINCT nullIf(toString(properties.claim_date), '')) AS claim_days
+    FROM scoped WHERE event = 'daily_reward_claim_confirmed' AND toString(properties.granted) IN ('true', '1')
+      AND uuid IN (SELECT uuid FROM selected)
+    GROUP BY account_id HAVING account_id IS NOT NULL
+), reward_followup AS (
+    SELECT reward_accounts.account_id AS account_id, first_claim_at, claim_days,
+      count(DISTINCT if(event = 'composition_requested' AND (timestamp > first_claim_at OR
+        (scoped.flow_id = first_claim_flow AND scoped.pos > first_claim_pos)), scoped.job_id, NULL)) AS requested_jobs,
+      count(DISTINCT if(event = 'composition_requested' AND (timestamp > first_claim_at OR
+        (scoped.flow_id = first_claim_flow AND scoped.pos > first_claim_pos)), formatDateTime(timestamp, '%Y-%m-%d', 'Asia/Seoul'), NULL)) AS request_days,
+      count(DISTINCT if(event = 'daily_reward_claim_confirmed' AND toString(properties.granted) IN ('true', '1'),
+        nullIf(toString(properties.claim_date), ''), NULL)) AS followup_claim_days
+    FROM reward_accounts LEFT JOIN scoped ON reward_accounts.account_id = toString(scoped.properties.account_id)
+      AND scoped.timestamp >= first_claim_at
+    GROUP BY reward_accounts.account_id, first_claim_at, claim_days
+)'''
+
+PERIOD_SPECS = [
+    ('all-job-outcomes', '13 전체 접수의 결과·활용 시도 — 유입별',
+     '날짜·속성 필터는 접수 이벤트를 고릅니다. 첫 작업 실패·오래된 탭·도착 누락도 포함한 고유 job입니다. 후속은 추출 시각까지 연결합니다. source/medium/campaign/content는 접수 당시 탭 최초 UTM이며 미상은 광고로 추정하지 않습니다. 저장은 시작, 공유 응답은 실제 전달 완료가 아닙니다.',
+     ALL_JOBS + ''' SELECT source AS `source`, medium AS `medium`, campaign AS `campaign`, content AS `content`,
+       count() AS `접수 job`, count(DISTINCT account_id) AS `식별 계정`, countIf(account_id IS NULL) AS `계정 미상 job`,
+       countIf(photo_source = 'upload') AS `직접 파일 접수`, sum(completed) AS `완료 관측`, sum(failed) AS `실패 관측`,
+       sum(viewed) AS `결과 표시`, sum(saved) AS `GIF 저장 시작`, sum(exported_or_copied) AS `내보내기 시도·복사`,
+       sum(share_attempted) AS `파일 공유 시도`, sum(share_resolved) AS `파일 공유 API 응답`
+       FROM all_jobs GROUP BY source, medium, campaign, content ORDER BY `접수 job` DESC'''),
+    ('repeat-jobs', '14 기간 내 추가 제작 — 실패 복구·결과 뒤·다른 날',
+     '날짜·속성 필터에 포함된 접수끼리 account_id로 연결합니다. 계정은 사람 수가 아니며 익명 재설치·다른 계정은 합치지 않습니다. 첫 관측 접수이지 생애 첫 제작이 아닙니다. 이후 기간의 제작은 기간을 넓혀 조회합니다. 실패 복구와 결과 뒤 제작은 겹칠 수 있고 새 목적 재사용을 입증하지 않습니다. 재접수 이벤트의 이전 job 누락도 별도 표시합니다.',
+     REPEAT_JOBS + ''' SELECT count() AS `기간 내 접수 job`, count(DISTINCT account_id) AS `식별 계정`,
+       countIf(account_id IS NULL) AS `계정 미상 job`,
+       countIf(additional = 1) AS `기간 내 추가 접수`, count(DISTINCT if(additional = 1, account_id, NULL)) AS `추가 제작 계정`,
+       countIf(after_result = 1) AS `이전 결과 표시 뒤 접수`, countIf(later_day = 1) AS `다른 KST 날짜 추가 접수`,
+       sum(failure_retry) AS `실패 상태에서 재접수`, sum(missing_previous) AS `이전 job 미연결 재접수`
+       FROM repeats'''),
+    ('daily-reward', '15 매일 3회 신규 수령 → 이후 제작',
+     '날짜·속성 필터는 granted=true 수령 확인 이벤트로 대상을 고릅니다. 계정·claim_date로 중복 수령 응답을 제거하고 granted=false는 신규 지급으로 세지 않습니다. 후속 접수는 추출 시각까지 같은 계정을 연결합니다. 수령 뒤 제작은 일일 이용권 소비의 증명이 아니며 실제 lot 차감·환불은 서버 보고서로 대조합니다. 혜택이 주어진 조건에서의 행동입니다.',
+     REWARD + ''' SELECT count() AS `신규 수령 확인 계정`, sum(claim_days) AS `기간 내 수령 계정일`,
+       sum(followup_claim_days) AS `후속 포함 수령 계정일`, countIf(followup_claim_days >= 2) AS `여러 날 수령 계정`,
+       countIf(requested_jobs > 0) AS `수령 뒤 접수 계정`, sum(requested_jobs) AS `수령 뒤 접수 job`,
+       countIf(request_days >= 2) AS `수령 뒤 여러 날 접수 계정`,
+       min(first_claim_at) AS `가장 이른 수령`, __CUTOFF__ AS `후속 관찰 추출 시각`
+       FROM reward_followup'''),
+    ('payment-observation', '16 결제 시도·응답 — 계정별 관측 단계',
+     '날짜·속성 필터는 각 이벤트의 발생 기간입니다. 단계별 식별 계정 수이며 같은 주문의 순차 퍼널·결제 건수·매출이 아닙니다. payment_id가 수집되지 않아 주문별 연결은 불가합니다. gateway_opened는 호출 직전, canceled는 사용자 취소와 제공사 오류를 포함합니다. test_payment=true/false/미계측을 분리하고 실제 승인·취소·LIVE 여부는 서버 원장을 확인합니다.',
+     BASE + ''' SELECT event AS `관측 단계`, coalesce(toString(properties.stage), '미적용') AS `단계`,
+       coalesce(toString(properties.test_payment), '미계측') AS `테스트 결제`,
+       count() AS `응답·시도 이벤트`, count(DISTINCT nullIf(toString(properties.account_id), '')) AS `식별 계정`,
+       countIf(nullIf(toString(properties.account_id), '') IS NULL) AS `계정 미상 이벤트`
+       FROM scoped WHERE uuid IN (SELECT uuid FROM selected)
+         AND event IN ('payment_checkout_started', 'payment_gateway_opened', 'payment_completed', 'payment_canceled', 'payment_failed')
+       GROUP BY event, `단계`, `테스트 결제` ORDER BY event, `단계`, `테스트 결제`'''),
+]
+SPECS += PERIOD_SPECS
+
 
 def build_definitions(internal_account_ids=(), observation_cutoff=None):
     account_filter = ''
+    internal_match = 'false'
     if internal_account_ids:
         if any(not account.replace('-', '').isalnum() for account in internal_account_ids):
             raise ValueError('Internal account IDs must be identifiers.')
         values = ', '.join("'" + account + "'" for account in internal_account_ids)
         account_filter = f"AND coalesce(toString(properties.account_id), '') NOT IN ({values})"
+        internal_match = f"coalesce(toString(properties.account_id), '') IN ({values})"
     cutoff = 'now()'
     if observation_cutoff:
         parsed = datetime.fromisoformat(observation_cutoff.replace('Z', '+00:00'))
@@ -305,12 +450,14 @@ def build_definitions(internal_account_ids=(), observation_cutoff=None):
         cutoff = f"parseDateTimeBestEffort('{parsed.isoformat()}')"
     definitions = []
     for key, name, description, sql in SPECS:
+        period = (' 날짜·분모는 이 타일의 설명을 따릅니다.' if key in {item[0] for item in PERIOD_SPECS}
+                  or key == 'measurement-quality' else ' 날짜 필터는 새 flow 도착의 코호트 선택 범위(기본 최근 7일)입니다.')
         definitions.append({
             'key': key, 'name': name,
-            'description': description + ' 날짜 필터는 새 flow 도착의 코호트 선택 범위(기본 최근 7일)입니다. 후속 행동은 별도 추출 시각까지 포함하며 현재는 ' + (observation_cutoff or '조회 시각까지 열린 관찰') + '입니다. 고정 후속 관찰창·실험 성공 기준은 미정입니다.',
+            'description': description + period + ' 추출 기준은 ' + (observation_cutoff or '조회 시각까지 열린 관찰') + '입니다. 고정 후속 관찰창·실험 성공 기준은 미정입니다.',
             'tags': [MANAGED_TAG, f'{MANAGED_TAG}:{key}'],
             'query': {'kind': 'DataTableNode', 'source': {'kind': 'HogQLQuery',
-                'query': sql.replace('__ACCOUNT_FILTER__', account_filter).replace('__CUTOFF__', cutoff),
+                'query': sql.replace('__ACCOUNT_FILTER__', account_filter).replace('__CUTOFF__', cutoff).replace('__INTERNAL_MATCH__', internal_match),
                 'filters': deepcopy(DATE_FILTER)}},
         })
     return definitions
@@ -318,6 +465,6 @@ def build_definitions(internal_account_ids=(), observation_cutoff=None):
 
 DASHBOARD = {
     'name': 'Gifgloo — 가치 경험과 콘텐츠 관측',
-    'description': '판정 질문: 의미 있는 대상을 원하는 GIF 장면에 넣어 표현·감상·소장할 가치를 느끼는 상황과 사용자가 있는가? 01 순차 구간에서 막힌 곳 → 02·03 유입/재료 조건 → 04·05·11·12 개별 흐름과 시간/오류 → 10 결과 뒤 행동 → 06 평가·07 재접수 단서 순으로 봅니다. H→I→C→P→K→J→R는 flow/재료/attempt/첫 job을 연결하며 사람 수가 아닙니다. 저장·공유는 선택 분기이고 실제 활용·의미·재사용 이유는 정성 근거와 대조합니다. 날짜는 새 도착 코호트, 후속은 추출 시각까지 열린 관찰입니다. 현재 프로젝트 날짜 기준 UTC(한국시간 +9시간)이며 실제 회차는 타임존을 포함한 시작·종료 시각으로 정합니다. 관찰 나이 차이·미완료를 이탈로 단정하지 않습니다. 08·09로 QA·구계약·연결 누락을 먼저 확인합니다. 운영자 계정 제외는 별도 등록 필요. PMF 합격선·회차·고정 후속 관찰창은 미정입니다.',
+    'description': '관찰 질문: 조합을 준비·접수하고 결과를 저장·공유하려 하는가, 다시 만들고 혜택을 받아 계속 사용하거나 결제를 시도하는가? 08 QA·등록 운영자·누락 확인 → 13 전체 작업과 유입별 결과 → 14 추가 제작 → 15 일일 혜택 → 16 결제 관측. 01~12는 첫 체험의 흐름·마찰 진단으로 유지합니다. 날짜 분모는 01~12 새 도착(08은 발생 기간), 13~14 접수 기간, 15 신규 수령 기간, 16 단계별 발생 기간입니다. 후속 관찰 범위는 타일 설명을 따릅니다. UTC 날짜이며 14의 다른 날은 KST 기준입니다. 계정≠사람, 저장·공유 응답≠실제 활용, 반복≠새 목적 가치, 쿠폰 수령 뒤 제작≠해당 쿠폰 소비, 클라이언트 결제 응답≠확정 매출입니다. 실제 소비·환불·결제는 서버 보고서로 대조합니다. 운영자 제외 목록은 비공개 설정으로 관리하고 08에는 남깁니다. 광고는 UTM으로 식별하며 미상 유입을 광고로 추정하지 않습니다. PMF 합격선·회차·고정 후속 관찰창은 미정입니다.',
     'tags': [MANAGED_TAG], 'pinned': True,
 }
