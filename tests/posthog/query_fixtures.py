@@ -133,7 +133,7 @@ def validation_cases(definitions):
         ('other-retry-tab', 'composition_retried', 8, 1, {'job_id': 'retry-unknown', 'previous_job_id': 'j9', 'flow_origin': 'result_return'}),
         ('other-retry-tab', 'composition_retried', 9, 2, {'job_id': 'retry-later', 'previous_job_id': 'j9', 'flow_origin': 'result_return'}),
     ]
-    return [
+    return observation_cases(definitions) + [
         ('material-four-choices-and-unknowns', material_sql, [
             ['01', '예시 GIF + 예시 사진'], ['02', '예시 GIF + 직접 파일'],
             ['03', '변경 GIF + 예시 사진'], ['04', '변경 GIF + 직접 파일'],
@@ -159,4 +159,80 @@ def validation_cases(definitions):
         ('stage-time-and-unfinished', regression_query(definitions,
             " SELECT flow_id, dateDiff('second', clicked_ready_pos.1, click_pos.1), dateDiff('second', click_pos.1, requested_at), if(result_viewed = 1, dateDiff('second', requested_at, result_at), NULL) FROM funnel WHERE has_request ORDER BY flow_id"),
             [['before-view-only', 1, 1, 5], ['complete', 1, 1, 89997], ['direct', 1, 1, 5], ['wrong-job', 1, 1, None]]),
+    ]
+
+
+def observation_cases(definitions):
+    def query(sql, events, cutoff=CUTOFF):
+        rows = []
+        for index, (event, second, props) in enumerate(events):
+            properties = {'analytics_schema_version': '2', 'traffic_type': 'external', '$host': 'gifgloo.com',
+                          'flow_id': 'old-tab', 'flow_event_sequence': str(index), **props}
+            def literal(value):
+                return "'" + str(value).replace("'", "''") + "'"
+            entries = ["'__missing'", 'NULL']
+            for key, value in properties.items():
+                entries.extend((literal(key), literal(value)))
+            rows.append(f"SELECT '{index}' AS uuid, {literal(event)} AS event, toDateTime('{ENTRY_FROM}') + interval {second} second AS timestamp, map({', '.join(entries)}) AS properties")
+        sql = sql.replace('WITH selected AS', 'WITH fixture AS (' + ' UNION ALL '.join(rows) + '), selected AS', 1)
+        sql = sql.replace('FROM events', 'FROM fixture')
+        sql = sql.replace('{filters.dateRange.from}', f"toDateTime('{ENTRY_FROM}')")
+        sql = sql.replace('{filters}', f"timestamp >= toDateTime('{ENTRY_FROM}') AND timestamp < toDateTime('{ENTRY_TO}')")
+        sql = sql.replace('__CUTOFF__', f"toDateTime('{cutoff}')")
+        sql = sql.replace('__ACCOUNT_FILTER__', "AND coalesce(toString(properties.account_id), '') != 'operator'")
+        return re.sub(r'((?:\w+\.)?properties)\.([\w$]+)', lambda m: "arrayElement(" + m[1] + ", '" + m[2] + "')", sql)
+
+    job_events = [
+        ('composition_requested', 1, {'job_id': 'a-failed', 'account_id': 'a'}),
+        ('composition_failed', 2, {'job_id': 'a-failed', 'account_id': 'a'}),
+        ('composition_requested', 3, {'job_id': 'b-success', 'account_id': 'a'}),
+        ('composition_requested', 4, {'job_id': 'b-success', 'account_id': 'a'}),
+        ('composition_retried', 4, {'job_id': 'b-success', 'account_id': 'a', 'from_status': 'failed'}),
+        ('result_downloaded', 5, {'job_id': 'b-success', 'account_id': 'a'}),
+        ('composition_completed', 5, {'job_id': 'b-success', 'account_id': 'a'}),
+        ('composition_result_viewed', 5, {'job_id': 'b-success', 'account_id': 'a'}),
+        ('result_downloaded', 5, {'job_id': 'b-success', 'account_id': 'a'}),
+        ('result_downloaded', 6, {'job_id': 'b-success', 'account_id': 'a'}),
+        ('result_file_share_attempted', 7, {'job_id': 'b-success', 'account_id': 'a'}),
+        ('result_file_share_resolved', 90000, {'job_id': 'b-success', 'account_id': 'a', 'flow_id': 'return-tab'}),
+        ('composition_requested', 60000, {'job_id': 'c-next-day', 'account_id': 'a', 'flow_id': 'new-tab'}),
+        ('composition_requested', 60001, {'job_id': 'd-unknown'}),
+        ('composition_requested', 10, {'job_id': 'qa', 'account_id': 'a', 'utm_campaign': 'qa_fixture'}),
+        ('composition_requested', 10, {'job_id': 'operator-job', 'account_id': 'operator'}),
+        ('composition_requested', 90001, {'job_id': 'outside-period', 'account_id': 'a'}),
+    ]
+    reward_events = [
+        ('composition_requested', 99, {'account_id': 'a', 'job_id': 'before'}),
+        ('daily_reward_claim_confirmed', 100, {'account_id': 'a', 'granted': 'true', 'claim_date': '2026-10-01'}),
+        ('daily_reward_claim_confirmed', 101, {'account_id': 'a', 'granted': 'false', 'claim_date': '2026-10-01'}),
+        ('daily_reward_claim_confirmed', 102, {'account_id': 'a', 'granted': 'true', 'claim_date': '2026-10-01'}),
+        ('daily_reward_claim_confirmed', 103, {'account_id': 'b', 'granted': 'false', 'claim_date': '2026-10-01'}),
+        ('composition_requested', 104, {'account_id': 'a', 'job_id': 'after'}),
+        ('composition_requested', 105, {'account_id': 'a', 'job_id': 'after'}),
+        ('daily_reward_claim_confirmed', 90000, {'account_id': 'a', 'granted': 'true', 'claim_date': '2026-10-02'}),
+        ('composition_requested', 90001, {'account_id': 'a', 'job_id': 'after-next-day'}),
+    ]
+    return [
+        ('all-jobs-later-success-dedup-return-qa', query(definitions.ALL_JOBS +
+          ' SELECT job_id, completed, failed, viewed, saved, share_attempted, share_resolved FROM all_jobs ORDER BY job_id', job_events),
+         [['a-failed', 0, 1, 0, 0, 0, 0], ['b-success', 1, 0, 1, 1, 1, 1], ['c-next-day', 0, 0, 0, 0, 0, 0], ['d-unknown', 0, 0, 0, 0, 0, 0]]),
+        ('repeat-account-result-failure-and-day', query(next(sql for key, _, _, sql in definitions.SPECS if key == 'repeat-jobs'), job_events),
+         [[4, 1, 1, 2, 1, 1, 1, 1, 1]]),
+        ('reward-dedup-new-grant-followup-jobs', query(definitions.REWARD +
+          ' SELECT account_id, claim_days, requested_jobs, request_days, followup_claim_days FROM reward_followup ORDER BY account_id', reward_events),
+         [['a', 1, 2, 2, 2]]),
+        ('reward-followup-cutoff', query(definitions.REWARD +
+          ' SELECT account_id, claim_days, requested_jobs, request_days, followup_claim_days FROM reward_followup ORDER BY account_id', reward_events, ENTRY_TO),
+         [['a', 1, 1, 1, 1]]),
+        ('payment-account-dedup-test-and-unknown', query(next(sql for key, _, _, sql in definitions.SPECS if key == 'payment-observation'), [
+            ('payment_checkout_started', 1, {'account_id': 'a'}),
+            ('payment_checkout_started', 2, {'account_id': 'a'}),
+            ('payment_completed', 3, {'account_id': 'a', 'test_payment': 'true'}),
+            ('payment_completed', 4, {'account_id': 'b', 'test_payment': 'false'}),
+            ('payment_failed', 5, {'stage': 'checkout'}),
+            ('payment_completed', 6, {'account_id': 'operator', 'test_payment': 'false'}),
+        ]), [['payment_checkout_started', '미적용', '미계측', 2, 1, 0],
+             ['payment_completed', '미적용', 'false', 1, 1, 0],
+             ['payment_completed', '미적용', 'true', 1, 1, 0],
+             ['payment_failed', 'checkout', '미계측', 1, 0, 1]]),
     ]
